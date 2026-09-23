@@ -101,7 +101,8 @@ entire string.
 
 ### Proof of correctness
 
-The theorem to prove is that the algorithm terminates and produces chunks:
+The theorem to prove is that the algorithm terminates and produces zero or
+more chunks. For nonempty input, write them as:
 
 ```text
 O = C0 + C1 + ... + Ck
@@ -113,6 +114,9 @@ such that:
 Z = N(C0) + N(C1) + ... + N(Ck)
 ```
 
+For empty input, the list of chunks is empty and both concatenations are the
+empty string.
+
 Furthermore, at every accepted pair of boundaries, the entire original string
 from its start to the original boundary must normalize to the normalized string
 from its start to the corresponding normalized boundary. Likewise, the
@@ -123,9 +127,13 @@ each remaining suffix until the end of the string.
 
 ### Results used by the proof
 
-The proof uses Lemmas 1, 7, 8, and 9 below. All four are proved in
+The proof uses Lemmas 0, 1, 7, 8, and 9 below. All five are proved in
 [the appendix](#appendix-unicode-details-behind-the-comparison-proof), with the
 relevant Unicode citations.
+
+0. **Lemma 0: Normalization and decomposition leave the empty string unchanged**
+   ([proof](#lemma-0-normalization-and-decomposition-leave-the-empty-string-unchanged)).
+   If `ε` is the empty string, then `N(ε) = ε` and `D(ε) = ε`.
 
 1. **Lemma 1: Extended grapheme cluster rules apply directly to any string**
    ([proof](#lemma-1-extended-grapheme-cluster-rules-apply-directly-to-any-string)).
@@ -192,8 +200,11 @@ the normalization of the unclaimed original suffix `U`. This is what allows
 the algorithm to repeat the same process on `U` to find the remaining pairs of
 boundaries.
 
-The invariant is true before the first iteration. At that point `P` is empty,
-`U = O`, `N(P)` is empty, and `Z = N(O)`.
+Initially, `P = ε` and `U = O`, so
+[Lemma 0](#lemma-0-normalization-and-decomposition-leave-the-empty-string-unchanged)
+gives `Z = N(O) = N(P) + N(U)`. The invariant therefore holds. If `O` is
+empty, the algorithm immediately returns no chunks and maps its only boundary,
+offset zero, to offset zero. The remaining proof assumes that `U` is nonempty.
 
 ### A successful comparison preserves the invariant
 
@@ -425,8 +436,12 @@ fails, `C` eventually contains all of `U`, leaving no original text after it:
 
 ```text
 C = U
-R = empty
+R = ε
+N(R) = ε
 ```
+
+The last equality is [Lemma 0](#lemma-0-normalization-and-decomposition-leave-the-empty-string-unchanged)
+applied to the empty remainder.
 
 The invariant says that the unclaimed suffix of `Z` is `N(U)`. Because the
 final candidate is `C = U`, its normalization is the same string:
@@ -691,7 +706,7 @@ resolves to.
 
 ## Appendix: Unicode details behind the comparison proof
 
-This appendix proves the nine lemmas that the main comparison proof and the
+This appendix proves the ten lemmas that the main comparison proof and the
 FormC/FormD optimization rely on, each from definitions and statements in
 official Unicode sources.
 
@@ -706,6 +721,9 @@ Unicode-defined fully decomposed form:
 
 The lemmas are:
 
+0. [Lemma 0](#lemma-0-normalization-and-decomposition-leave-the-empty-string-unchanged):
+   Normalization and decomposition leave the empty string unchanged:
+   `N(ε) = ε` and `D(ε) = ε`.
 1. [Lemma 1](#lemma-1-extended-grapheme-cluster-rules-apply-directly-to-any-string):
    Extended grapheme cluster rules can be applied directly to any string,
    whatever its normalization form.
@@ -732,6 +750,54 @@ The lemmas are:
 9. [Lemma 9](#lemma-9-the-unchanged-prefix-lemma):
    The unchanged-prefix lemma: if `Q` and `V` are normalized and
    `N(Q + V) = Q + S`, then `S = V`.
+
+### Lemma 0: Normalization and decomposition leave the empty string unchanged
+
+Let `ε` denote the empty string. We will prove that:
+
+```text
+N(ε) = ε
+D(ε) = ε
+```
+
+UAX #15 defines its substring notation as follows:
+
+> “X[i, j] The substring of X that includes all code units after offset i and
+> before offset j; for example, if X is “abc”, then X[1,2] is “b”” <!-- style-lint-ok: verbatim Unicode quote -->
+>
+> (from [UAX #15 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr15/tr15-56.html#Notation))
+
+It also defines the available offsets:
+
+> “An offset into a Unicode string is a number from 0 to n, where n is the
+> length of the string and indicates a position that is logically between
+> Unicode code units (or at the very front or end in the case of 0 or n,
+> respectively).”
+>
+> (from [UAX #15 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr15/tr15-56.html#Notation))
+
+Taking `i = j = 0` selects no code units, so `X[0,0]` is the empty string.
+The empty string is therefore a substring of every string. UAX #15 then
+states:
+
+> “all of the Normalization Forms are closed under substringing.”
+>
+> (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
+
+Therefore the empty substring of a string normalized in any of the four forms
+is itself normalized in that form. UAX #15 defines what that means:
+
+> “isNFx(s) is true if and only if toNFX(s) is identical to s.”
+>
+> (from [UAX #15 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr15/tr15-56.html#Notation))
+
+Apply that statement with `s = ε`. For each normalization form `NFx`, it gives
+`toNFx(ε) = ε`. Both `N` and `D` select one of those four forms, so the two
+equations above follow.
+
+This also agrees directly with the normalization algorithms: the empty string
+contains no code points to decompose, no adjacent pair to reorder, and no
+characters to compose.
 
 ### Lemma 1: Extended grapheme cluster rules apply directly to any string
 
@@ -1052,6 +1118,9 @@ We will prove that, for every string `X`:
 D(N(X)) = D(X)                                      (A1)
 ```
 
+If `X = ε`, Lemma 0 makes both sides `ε`, so equation (A1) holds. The
+remaining argument covers nonempty `X`.
+
 UAX #15's Design Goals section states:
 
 > “Another consequence of the definitions is that any chain of normalizations
@@ -1138,6 +1207,11 @@ For all strings `X` and `Y`:
 D(X + Y) = canonically order (D(X) + D(Y))          (A2)
 ```
 
+If either string is empty, equation (A2) follows immediately from Lemma 0.
+For example, if `X = ε`, both sides reduce to `D(Y)`: `D(Y)` is already
+canonically ordered, so ordering `ε + D(Y)` leaves it unchanged. The case
+`Y = ε` is symmetric. The remaining argument covers two nonempty strings.
+
 Unicode definition D64 states:
 
 > “A full decomposition of a character sequence results from decomposing each
@@ -1182,6 +1256,13 @@ same merge in detail. This proves equation (A2).
 ### Lemma 6: Equal decompositions give equal normalized forms
 
 We will prove that `D(X) = D(Y)` implies `N(X) = N(Y)`.
+
+If either string is empty, the premise forces both to be empty. Definition D62,
+quoted in [Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary),
+says that decomposing each character produces one or more characters, and
+canonical ordering doesn't delete any. A nonempty string therefore can't have
+an empty decomposition. Lemma 0 then gives `N(X) = N(Y) = ε`. The remaining
+argument covers two nonempty strings.
 
 There are two cases.
 
@@ -1248,6 +1329,12 @@ N(X + Y) = N(N(X) + N(Y))                          (A5)
 In words, normalizing two concatenated strings produces the same result as
 normalizing each string first, concatenating those results, and then
 normalizing the complete concatenation.
+
+If either string is empty, equation (A5) follows from Lemma 0 and
+[normalization's idempotence](#proof-step-5-equal-decompositions-give-equal-normalized-strings).
+For example, if `X = ε`, its left side is `N(Y)`, while its right side reduces
+to `N(N(Y)) = N(Y)`. The case `Y = ε` is symmetric. The remaining argument
+covers two nonempty strings.
 
 [Lemma 5](#lemma-5-decomposing-a-concatenation-orders-the-two-decompositions-together),
 equation (A2), is the following general rule:

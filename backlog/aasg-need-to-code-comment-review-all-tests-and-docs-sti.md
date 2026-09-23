@@ -13,3 +13,4 @@ docs/UnicodeGotchas.md
 docs/UnicodeInternalsArchitecure.md
 docs/CodeArchitecture.md
 docs/ErrorArchitecture.md
+docs/MappingPositionsAfterNormalization.md
