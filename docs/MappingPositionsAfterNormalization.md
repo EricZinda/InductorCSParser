@@ -1494,7 +1494,8 @@ T = canonically order (D(Q) + D(S))
 
 The recovery procedure has exactly the same two inputs in both cases: the
 ordered sequence `T` and the known contribution `D(Q)`. It can therefore
-remove the contribution of `D(Q)` from `T` directly as follows:
+recover the *following string* by removing the contribution of `D(Q)` like
+this:
 
 1. Remove the *unchanged prefix* of `D(Q)` from the start of `T`. Proof step 3
    showed that only `D(Q)`'s *trailing nonstarters* can intermix with the
@@ -1536,7 +1537,8 @@ Proof step 4 established that these two suffixes have the same decomposition:
 D(V) = D(S)                                         (A8)
 ```
 
-Equation (A8) says directly that `S` and `V` have the same decomposition `D`.
+Equation (A8) says that applying `D` to `V` and `S` produces the same
+decomposed string.
 [Lemma 6](#lemma-6-equal-decompositions-give-equal-normalized-forms) states
 that strings with the same decomposition have the same normalized form.
 Therefore:
@@ -1578,7 +1580,7 @@ Substitute both equalities into equation (A9):
 V = N(V) = N(S) = S
 ```
 
-The first and last terms in this equality chain give `V = S`, and therefore
+Therefore
 `S = V`. That's exactly the conclusion required by the lemma:
 
 ```text
