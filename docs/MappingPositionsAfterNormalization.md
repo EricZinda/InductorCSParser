@@ -1610,20 +1610,20 @@ A tempting proof of Lemma 9 would go like this:
 4. The lemma's premise also says that the result is `Q + S`. Therefore
    `Q + V = Q + S`, and removing the common prefix `Q` gives `V = S`.
 
-The unsupported step is step 2: an unchanged output prefix doesn't prove that
+The problem is step 2: an unchanged output prefix doesn't prove that
 nothing crossed the join during normalization. The following example shows
 why.
 
 Let `N` be FormC, let `Q` be `Ậ` (U+1EAC, LATIN CAPITAL LETTER A WITH
-CIRCUMFLEX AND DOT BELOW), and let `V` be U+0323 COMBINING DOT BELOW. Both `Q`
+CIRCUMFLEX AND DOT BELOW), and let `V` be U+0323, COMBINING DOT BELOW. Both `Q`
 and `V` are already normalized. Before normalization, their join is:
 
 ```text
 U+1EAC[Q] | U+0323[V]
 ```
 
-The `[Q]` and `[V]` labels record where each code-point occurrence came from.
-They aren't part of the string. FormC first canonically decomposes the entire
+(The `[Q]` and `[V]` labels record where each code-point occurrence came from,
+they aren't part of the string.) FormC first canonically decomposes the entire
 input and orders the resulting sequence before composing it again. To track
 what happens across the `Q | V` join, begin with the decomposition step.
 Decomposing U+1EAC produces `A`, a dot below, and a circumflex. U+0323 has no
