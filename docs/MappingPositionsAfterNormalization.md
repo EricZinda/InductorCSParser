@@ -1397,11 +1397,17 @@ because canonical ordering has been applied to each entire concatenation and
 may move some of its code points. To prove `D(V) = D(S)`, we must first
 determine exactly how ordering can mix the two concatenated inputs.
 
-[Lemma 4](#lemma-4-canonical-ordering-is-stable) states that starters remain
-fixed and can't be crossed, while each stretch of nonstarters is stably
-ordered by `ccc`. Therefore only the trailing nonstarters of `D(Q)` and the
-leading nonstarters of the following decomposition (`D(V)` on the left side of
-equation (A7), or `D(S)` on the right) can intermix.
+Recall what [Lemma 4](#lemma-4-canonical-ordering-is-stable) outlined in terms of sorting:
+Canonical ordering swaps an adjacent pair only when the left code point has a
+greater positive `ccc` than the right one. A starter has `ccc = 0`, so it can't
+participate in a swap, and no code point can cross it. Code points with equal
+`ccc` values also never swap. Consequently, starters remain fixed, while each
+stretch of nonstarters is sorted by `ccc` without changing the relative order
+of equal-`ccc` code points.
+
+Therefore only the trailing nonstarters of `D(Q)` and the leading nonstarters
+of the following decomposition (`D(V)` on the left side of equation (A7), or
+`D(S)` on the right) can intermix.
 
 For brevity, we'll use the term *following string* to refer to `D(V)` on the left side of
 equation (A7) or `D(S)` on the right. Given the known `D(Q)` and the result of
