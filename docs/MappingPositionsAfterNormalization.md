@@ -665,8 +665,7 @@ UAX #29 explicitly states that grapheme clusters remain unchanged across
 canonically equivalent forms, but presents that guarantee in explanatory prose
 rather than as a separately numbered conformance requirement. This proof
 treats it as a promised property of Unicode's default extended-grapheme-cluster
-rules and data. Caveat 2 separately addresses the fact that the project's
-actual segmenters don't run that exact configuration.
+rules and data.
 
 #### Caveat 2: neither segmenter this project ships runs that exact configuration
 
@@ -691,12 +690,9 @@ resolves to.
 
 ## Appendix: Unicode details behind the comparison proof
 
-This appendix proves two derived lemmas used by the main comparison proof:
-Lemma 8, for normalizing a concatenation, and Lemma 9, the unchanged-prefix
-lemma. Both proofs depend on seven supporting Unicode lemmas, established
-first. Some of those lemmas are also used independently in the main proof
-rather than only through the two derived results, and Lemmas 1 and 3 are also
-used by the FormC/FormD optimization.
+This appendix proves the nine lemmas that the main comparison proof and the
+FormC/FormD optimization rely on, each from definitions and statements in
+official Unicode sources.
 
 Several of the lemmas compare strings through their fully decomposed forms and use `N` and `D` to indicate this for shorthand. For
 the selected normalization operation `N`, let `D` denote its corresponding
@@ -707,25 +703,34 @@ Unicode-defined fully decomposed form:
 | FormC or FormD | FormD |
 | FormKC or FormKD | FormKD |
 
-The seven supporting lemmas are:
+The lemmas are:
 
-1. Extended grapheme cluster rules can be applied directly to any string,
+1. [Lemma 1](#lemma-1-extended-grapheme-cluster-rules-apply-directly-to-any-string):
+   Extended grapheme cluster rules can be applied directly to any string,
    whatever its normalization form.
-2. Every cut used by the mapping algorithm is at a code-point boundary.
-3. Normalizing a string doesn't change its decomposition:
+2. [Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary):
+   Every cut used by the mapping algorithm is at a code-point boundary.
+3. [Lemma 3](#lemma-3-normalization-preserves-the-decomposition):
+   Normalizing a string doesn't change its decomposition:
    `D(N(X)) = D(X)`.
-4. Canonical ordering is stable: code points with equal combining classes
+4. [Lemma 4](#lemma-4-canonical-ordering-is-stable):
+   Canonical ordering is stable: code points with equal combining classes
    don't exchange places.
-5. Decomposing a concatenation is equivalent to concatenating the two
+5. [Lemma 5](#lemma-5-decomposing-a-concatenation-orders-the-two-decompositions-together):
+   Decomposing a concatenation is equivalent to concatenating the two
    decompositions and ordering the complete result:
    `D(X + Y) = canonically order (D(X) + D(Y))`.
-6. Strings with the same decomposition have the same selected
+6. [Lemma 6](#lemma-6-equal-decompositions-give-equal-normalized-forms):
+   Strings with the same decomposition have the same selected
    normalized form: if `D(X) = D(Y)`, then `N(X) = N(Y)`.
-7. A substring of normalized text is normalized.
-
-Lemma 8 uses Lemmas 3, 5, and 6. Lemma 9 uses Lemmas 2 through 7. Each
-supporting lemma is established below using definitions and statements from
-official Unicode sources before either proof uses it.
+7. [Lemma 7](#lemma-7-a-substring-of-normalized-text-is-normalized):
+   A substring of normalized text is normalized.
+8. [Lemma 8](#lemma-8-normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole):
+   Normalizing a concatenation directly equals normalizing its parts, then
+   the whole: `N(X + Y) = N(N(X) + N(Y))`.
+9. [Lemma 9](#lemma-9-the-unchanged-prefix-lemma):
+   The unchanged-prefix lemma: if `Q` and `V` are normalized and
+   `N(Q + V) = Q + S`, then `S = V`.
 
 ### Lemma 1: Extended grapheme cluster rules apply directly to any string
 
