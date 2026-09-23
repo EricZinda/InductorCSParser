@@ -211,9 +211,14 @@ the first normalizing Compile or Parse throws unless the caller enables
 `UnicodeEnvironment.AcceptHostGlobalization`. `HostGlobalizationCheckTests`
 verify the exception and opt-out in-process.
 `HostGlobalizationChildProcessTests` start processes in the actual host modes
-to verify their detection. Accepting one of these modes is supported, but its
-Unicode behavior isn't covered by the differential tests, which only run in
-the environment above.
+to verify their detection. `AcceptHostGlobalization` only suppresses this
+safety check. It doesn't certify the host's Unicode behavior. An application
+that enables it must run its parser integration tests in a separate process
+started with the same globalization setting and, for NLS, on the same pinned
+Windows version used in production. Invariant globalization should be accepted
+only when the application doesn't depend on normalization or deliberately
+wants normalization to do nothing. Applications that need tested,
+host-independent behavior should select `UnicodeImplementation.Bundled`.
 
 ## The IL2CPP Pass
 
