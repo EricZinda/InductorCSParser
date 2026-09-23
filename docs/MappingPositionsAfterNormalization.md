@@ -1461,18 +1461,20 @@ preserves the order within each stretch.
 
 This matters because the recovery procedure must recover the actual code-point
 sequence of the *following string* from the ordered result, not merely its
-`ccc` values. The `q` and `r` labels are only for the schematic. The actual
-output doesn't record origins. Even if some `q` and `r` code points are
+`ccc` values. The actual
+output doesn't record origins, the `q` and `r` labels are only for the schematic. Even if some code points are
 identical, `D(Q)` tells us how
 many `q` occurrences are at the front of each merged `ccc` group. Remove that
 many from the front of the group. What remains within the merged stretch is
 exactly the occurrences from the *following string*, so identical code-point
 values don't make the recovery ambiguous.
 
-We know `D(Q)`, so use the process above to remove its *trailing nonstarters*
+We know `D(Q)`, so we can use the process above to remove its *trailing nonstarters*
 from the merged stretch. After removing `D(Q)`'s contribution, what remains is
 the *leading nonstarters* of the *following string* followed by its *unchanged
 rest*, which together make up the complete *following string*.
+
+Thus, the recovery procedure can recover the exact *following string* from the result of `canonically order (D(Q) + following string)` since we know that result and the original value of `D(Q)`. Now, let's use this recovery procedure in the proof.
 
 #### Proof step 4: Apply the recovery procedure to equation (A7)
 
