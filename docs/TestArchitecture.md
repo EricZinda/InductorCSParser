@@ -181,29 +181,43 @@ Tests that target one specific implementation never rely on the ambient resoluti
 
 The resolution itself is asserted at both ends with behavior tripwires, not just enum checks: the setting fixture asserts Automatic resolves to Runtime on net8.0, and the Unity smoke test asserts it resolves to `Bundled` in the player, with the CRLF cluster length and the fi-ligature expansion failing first if the wrong implementation is in use. The freeze semantics defend the arrangement structurally too. Once anything has queried, a stray assignment throws instead of silently flipping the implementation under other fixtures.
 
-## The Globalization Oracle
+## The Unicode Test Environment
 
-The differential tests in `Lexing/` compare the built-in segmenter and normalizer against the runtime's `StringInfo` and `string.Normalize`, and those two runtime implementations get their Unicode data from different places. `string.Normalize` hands the work to ICU (International Components for Unicode, the open-source library most operating systems supply for Unicode algorithms), and which ICU a host has moves with OS updates (or disappears entirely under Windows NLS or invariant globalization). `StringInfo`'s Unicode data is compiled into the runtime itself, so its version stamp is the runtime version.
+The differential tests in `Lexing/` compare the built-in implementation with
+.NET's `StringInfo` and `string.Normalize`. Because `StringInfo` gets its data
+from the runtime while `string.Normalize` uses the host's globalization
+library, those results could otherwise vary by machine.
 
-The suite enforces one known configuration: `GlobalizationOracleFixture` is a `[SetUpFixture]` that runs before any test in the assembly, and it fails the whole run, with a message saying what to fix, unless three things hold: the process is .NET 10 (the runtime whose `StringInfo` the built-in segmenter is verified against), the loaded ICU is exactly the ICU 72.1 the test project ships (the `Microsoft.ICU.ICU4C.Runtime` reference in `InductorParser.Tests.csproj`), and neither NLS nor invariant globalization is active. A green run therefore always means "verified against .NET 10 with ICU 72.1", and a machine whose globalization drifted can't quietly redefine what the differential tests prove.
+`GlobalizationOracleFixture` therefore requires .NET 10, the ICU 72.1 package
+shipped with the test project, and normal ICU mode rather than Windows NLS or
+invariant globalization. It stops the test assembly if any requirement isn't
+met. A passing run consequently always means “matches .NET 10 with ICU 72.1.”
 
-The odd-looking part is that ICU 72.1 is Unicode 15.0 data while the built-in tables are Unicode 16.0. It stays the oracle for two reasons. No newer app-local ICU package exists to ship. And the mismatch costs almost nothing: Unicode's normalization stability policy says a character's normalization never changes once it's assigned, so ICU 72.1 and the 16.0 tables give identical answers for every character assigned through 15.0. The normalization sweeps skip only the code points 16.0 added (`UnicodeVersionDelta.cs` holds that set) and compare exactly everywhere else.
+Two suites establish different claims:
 
-Under Windows NLS the fixture fails the run outright rather than letting the tests execute against NLS data, so a green run can't secretly mean "matches NLS". Running under NLS is still supported for users (that's what `AcceptHostGlobalization` is for, described below), it just has no test coverage of its own. If it ever needs some, it would get its own named test run instead of being silently selected by the host.
+- The differential tests establish that the implementation matches .NET in
+  that environment. ICU 72.1 contains Unicode 15.0 data, so the
+  normalization sweep excludes only the characters added in Unicode 16.0.
+  `UnicodeVersionDelta.cs` lists them. Unicode's normalization stability
+  policy keeps the results for previously assigned characters unchanged.
+- The `[Explicit]` Unicode conformance tests establish compliance with Unicode
+  16.0 by running `NormalizationTest-16.0.0.txt` and
+  `GraphemeBreakTest-16.0.0.txt`. They include the characters omitted from the
+  differential sweep.
 
-The tests make two separate claims, proven by two separate suites. "Matches .NET" comes from the differential tests, run against the enforced environment above. "Follows the Unicode standard" comes from the `[Explicit]` UnicodeConformance suites, which run the official answer files (`NormalizationTest-16.0.0.txt` and `GraphemeBreakTest-16.0.0.txt`) against the built-in implementations. The two overlap on purpose: the code points the differential sweeps skip, including Unicode 16.0's context-sensitive composites, are covered by the conformance files, so nothing falls through the gap.
-
-The shipped library also throws by default in these configurations so that developers understand that their runtime environment has been modified. When the Runtime implementation is active and the process runs invariant globalization or NLS, the first normalizing Compile or Parse throws. The code is `HostGlobalizationCheck` in `src/InductorParser/Lexing/Unicode/`, and `UnicodeEnvironment.AcceptHostGlobalization` is the opt-out.
-
-The check is two steps, notice the mode and then throw, and each step gets its own test. The throw step is easy to test in-process: `HostGlobalizationCheckTests` uses an internal hook to make the check believe the process is invariant or NLS, then asserts the exception, the message, and the `AcceptHostGlobalization` opt-out.
-
-The notice-the-mode step can't be tested that way. A process's globalization is fixed the moment it starts, and the test process always starts in normal ICU mode. So `HostGlobalizationChildProcessTests` starts a process that genuinely is in the bad mode: it launches the small `InductorParser.Tests.GlobalizationChild` console app with `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` or `DOTNET_SYSTEM_GLOBALIZATION_USENLS` set in its environment, and asserts the real detection fires there.
-
-The child app deliberately ships no app-local ICU. That makes its clean-environment run useful too: it proves detection passes against plain host globalization, something the ICU-pinned test process can never check.
+The shipped library also detects host configurations for which the Runtime
+implementation hasn't been verified. Under NLS or invariant globalization,
+the first normalizing Compile or Parse throws unless the caller enables
+`UnicodeEnvironment.AcceptHostGlobalization`. `HostGlobalizationCheckTests`
+verify the exception and opt-out in-process.
+`HostGlobalizationChildProcessTests` start processes in the actual host modes
+to verify their detection. Accepting one of these modes is supported, but its
+Unicode behavior isn't covered by the differential tests, which only run in
+the environment above.
 
 ## The IL2CPP Pass
 
-`dotnet test` runs on the .NET 10 CoreCLR, a JIT runtime, against the library's net8.0 build. Unity's IL2CPP backend (iOS, WebGL, Switch) loads the netstandard2.1 build and compiles it ahead of time, so code that passes every `dotnet test` can still fail on first load in a player. `src/InductorParser.Tests/Unity/` is a minimal Unity project that exists to catch exactly that.
+`dotnet test` runs on the .NET 10 CoreCLR, a JIT runtime, against the library's net8.0 build. Unity's IL2CPP backend (iOS, WebGL, Switch) loads the netstandard2.1 build and compiles it ahead of time, so code that passes every `dotnet test` can still fail on first load in Unity. `src/InductorParser.Tests/Unity/` is a minimal Unity project that exists to catch exactly that.
 
 ```
 ./src/InductorParser.Tests/runil2cpptest.sh
