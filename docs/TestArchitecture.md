@@ -54,8 +54,6 @@ The rest of this doc answers one question: what does a rule's test file need bef
 
 Shared helpers (`TraceTestHelpers.cs`, `NormalizationExamples.cs`, the matrix helpers) sit loose at the project root. Files in the first three folders all use `namespace InductorParser.Tests;`.
 
-Every failure test below leans on the error model in [ErrorArchitecture.md](ErrorArchitecture.md): when a parse fails, the deepest failure wins, and the reported position is where the failing read started, not where it gave up.
-
 ## What Every Rule's Test File Needs
 
 **Success.** Parse input the rule accepts. Where the rule produces a Symbol, assert its shape (id, text, children).
@@ -122,15 +120,29 @@ public void And_later_child_failure_reports_at_deeper_position()
 
 **Lookahead and forwarding rules** (`Not`, `Peek`, `LateBoundRule`, `Alias`). A zero-consumption test: position doesn't move when the rule runs. For `LateBoundRule`, cover bound and unbound states, the "never bound" error, and its always-rejected modifiers.
 
-## Matrix Tests
+## Normalization Matrix Tests
 
-Normalization can rewrite both the grammar's stored text and the input at Compile time, and the tests that catch normalization bugs are parameterized matrices, not hand-picked examples. Both matrices draw from `NormalizationExamples.RowFormPairs` at the test project root: a table of grapheme behaviors crossed with the four `NormalizationForm` values, with a self-check fixture asserting every column matches what `string.Normalize` really produces. New normalization tests should pull cases from this table too.
+Normalization tests use `NormalizationExamples.RowFormPairs`, which crosses
+representative grapheme cases with all four `NormalizationForm` values. A
+self-check verifies the expected values against `string.Normalize`. New
+normalization tests should reuse this table.
 
-The matching matrix runs every leaf rule that rewrites stored text under a form (`Token`, `Literal`, `LiteralIgnoreAsciiCase`, `OneOf`, `NoneOf`, `ScanWhile`, `ScanUntil`) against every row, under four shapes: bare, `OneOrMore(leaf)`, `Or(leaf, fallback)`, and `And(leaf, Eof())`. The composite shapes matter because an evaluator optimization that peeks precomputed first-token data is exactly the code that goes wrong when that data goes stale under normalization, and `And` + `Eof` catches a leaf that consumed the wrong span.
+The test project has two normalization matrices:
 
-The SourceRange matrix runs every leaf-emitting rule as the target of `And(Literal(prefix), target)` under every form and asserts the target Symbol's `SourceRange` points into the caller's original input. Whenever a form changes the input's length, a bug here silently reports positions in the internal normalized copy instead.
+- **Matching:** Runs every rule whose stored text is normalized (`Token`,
+  `Literal`, `LiteralIgnoreAsciiCase`, `OneOf`, `NoneOf`, `ScanWhile`, and
+  `ScanUntil`) against every case and normalization form. It tests each rule
+  directly and inside `OneOrMore`, `Or`, and `And(..., Eof())` so that both
+  matching decisions and the amount of input consumed are checked.
+- **Source mapping:** Runs every rule that emits a Symbol after a prefix and
+  verifies that its `SourceRange` refers to the caller's original input, even
+  when normalization changes its length.
 
-Each rule also has one `SourceText_on_<Rule>_returns_matched_text_under_every_FlattenType` test: FlattenType controls what shows up in the tree, never what text a Symbol reports. Rule-shape-specific SourceRange cases (zero-width matches, multi-line spans, Delete-flattened children) go in the rule's file. The machinery-level position tests (`Core/SymbolPositionTests.cs`, `Core/RawSourceTextTests.cs`) cover line/column derivation and original-text recovery.
+Each emitting rule also verifies that `SourceText` returns the matched original
+text under every `FlattenType`. Rule-specific cases, such as zero-width or
+multi-line ranges, belong in the rule's test file. Low-level position and
+original-text recovery are covered by `Core/SymbolPositionTests.cs` and
+`Core/RawSourceTextTests.cs`.
 
 ## Cross-Cutting Tests
 
