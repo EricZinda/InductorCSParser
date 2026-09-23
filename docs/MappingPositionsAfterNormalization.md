@@ -1371,43 +1371,33 @@ canonically order (D(Q) + D(V))
 
 #### Proof step 3: Define and justify the recovery procedure
 
-Equation (A7) has the same fixed `D(Q)` on both sides. To use that equality to
-prove `D(V) = D(S)`, we need a procedure that removes the contribution of
-`D(Q)` and recovers the complete string that followed it. This step defines
-that procedure and proves that it works even when canonical ordering mixes
-combining marks where the strings meet.
+Equation (A7) says that canonically ordering `D(Q) + D(V)` and
+`D(Q) + D(S)` produces the same string. We can't cancel `D(Q)` directly
+because canonical ordering has been applied to each entire concatenation and
+may move some of its code points. To prove `D(V) = D(S)`, we must first
+determine exactly how ordering can mix the two concatenated inputs.
 
-Lemma 4 established that canonical ordering is a stable sort within each
-maximal stretch of nonstarters. Consequently:
+Lemma 4 states that starters remain fixed and can't be crossed, while each
+stretch of nonstarters is stably ordered by `ccc`. Therefore only the trailing
+nonstarters of `D(Q)` and the leading nonstarters of the following
+decomposition (`D(V)` on the left side of equation (A7), or `D(S)` on the
+right) can intermix.
 
-- a starter never moves
-- nonstarters finish in nondecreasing `ccc` order between starters
-- code points with equal `ccc` values never exchange places
+In this procedure, the *following string* is `D(V)` on the left side of
+equation (A7) or `D(S)` on the right. Given the known `D(Q)` and the result of
+canonically ordering `D(Q) + following string`, the procedure recovers the
+*following string*.
 
-Why can a starter never move? As established in Lemma 4, canonical ordering
-works only by swapping adjacent code points when the left code point has a
-greater positive `ccc` value than the right one. A starter has `ccc = 0`, so it
-can't take part in such a swap. Because code points move only through adjacent
-swaps, no code point can cross a starter.
-
-##### Recovery procedure
-
-Given the known `D(Q)` and the result of canonically ordering `D(Q)` plus a
-following decomposition, this procedure recovers that complete following
-decomposition.
-
-Only the trailing nonstarters of `D(Q)` and the leading nonstarters of the
-following decomposition (`D(V)` on the left side of equation (A7), or `D(S)`
-on the right) can intermix. To separate their contributions, first split the
-known string `D(Q)` into two parts:
+To separate their contributions, first split the known string `D(Q)` into two
+parts:
 
 ```text
 D(Q) = unchanged prefix + trailing nonstarters
 ```
 
 The trailing nonstarters are the complete stretch of nonstarters at the end of
-`D(Q)`. They're empty if `D(Q)` ends with a starter. Split the string following
-`D(Q)` in the opposite way:
+`D(Q)`. They're empty if `D(Q)` ends with a starter. Split the *following
+string* in the opposite way:
 
 ```text
 following string = leading nonstarters + unchanged rest
@@ -1426,7 +1416,7 @@ canonically order (D(Q) + following string)
 ```
 
 Here's a schematic example. The numbers are `ccc` values, `q` labels code
-points from `D(Q)`, and `r` labels code points from the following string:
+points from `D(Q)`, and `r` labels code points from the *following string*:
 
 ```text
 before stable merge:  220:q1  230:q2  230:q3  220:r1  220:r2  232:r3
@@ -1434,28 +1424,27 @@ after stable merge:   220:q1  220:r1  220:r2  230:q2  230:q3  232:r3
 ```
 
 Stable ordering keeps a code-point occurrence from `D(Q)` before one from the
-following string when their `ccc` values are the same. After the stable merge,
+*following string* when their `ccc` values are the same. After the stable merge,
 if you remove `q1` from the start of the merged `220` group and `q2,q3` from the
 start of the merged `230` group, what remains is exactly
-`220:r1 220:r2 232:r3`, the leading nonstarters of the following string. This
+`220:r1 220:r2 232:r3`, the leading nonstarters of the *following string*. This
 shows how the merge may interleave the two nonstarter stretches, but it
 preserves the order within each stretch.
 
-This matters because the proof must recover the actual code-point sequence
-following `D(Q)` from the ordered result, not merely its `ccc` values. The `q`
-and `r` labels are only for the schematic. The actual output doesn't record
-origins. Even if some `q` and `r` code points are identical, `D(Q)` tells us how
+This matters because the recovery procedure must recover the actual code-point
+sequence of the *following string* from the ordered result, not merely its
+`ccc` values. The `q` and `r` labels are only for the schematic. The actual
+output doesn't record origins. Even if some `q` and `r` code points are
+identical, `D(Q)` tells us how
 many `q` occurrences are at the front of each merged `ccc` group. Remove that
 many from the front of the group. What remains within the merged stretch is
-exactly the occurrences from the following string, so identical code-point
+exactly the occurrences from the *following string*, so identical code-point
 values don't make the recovery ambiguous.
 
-We know that `D(Q)` has the unchanged prefix identified in the split above.
-Just as in the example, the code points contributed by `D(Q)` can be identified
-and removed: remove the unchanged prefix directly, then use the process above
-to remove its trailing nonstarters from the merged stretch. What remains is the
-leading nonstarters from the following string, followed by its unchanged rest.
-Together, those parts are the complete string that followed `D(Q)`.
+We know `D(Q)`, so use the process above to remove its trailing nonstarters
+from the merged stretch. After removing `D(Q)`'s contribution, what remains is
+the leading nonstarters of the *following string* followed by its unchanged
+rest, which together make up the complete *following string*.
 
 #### Proof step 4: Apply the recovery procedure to equation (A7)
 
@@ -1474,20 +1463,24 @@ T = canonically order (D(Q) + D(S))
 ```
 
 The recovery procedure has exactly the same two inputs in both cases: the
-ordered sequence `T` and the known contribution `D(Q)`. It therefore performs
-the same removals in both cases:
+ordered sequence `T` and the known contribution `D(Q)`. It can therefore
+remove the contribution of `D(Q)` from `T` directly as follows:
 
-1. It removes the unchanged prefix contributed by `D(Q)`.
-2. Within each merged `ccc` group, it removes from the front the known number
-   of code-point occurrences contributed by the trailing nonstarters of
-   `D(Q)`.
-3. Everything not removed is the recovered following string.
+1. Remove the unchanged prefix of `D(Q)` from the start of `T`. Proof step 3
+   showed that only `D(Q)`'s trailing nonstarters can intermix with the
+   *following string*, so this prefix appears unchanged at the start of `T`.
+2. Within each merged `ccc` group, remove from the front the known number of
+   code-point occurrences contributed by the trailing nonstarters of `D(Q)`.
+   Stable ordering preserves those occurrences and their relative order and
+   places them before occurrences from the *following string* with the same
+   `ccc`. Only their positions in the complete merged stretch may have
+   changed.
+3. Everything not removed is the recovered *following string*.
 
 In both cases, the procedure is applied to the same string `T` using the same
 known `D(Q)`. It therefore makes the same removals and leaves the same
-remainder. The preceding argument proved that this remainder is exactly
-`D(V)` in the first equality and exactly `D(S)` in the second, rather than
-merely strings with the same `ccc` values. Therefore:
+remainder. The preceding argument proved that this remainder is `D(V)` in the
+first equality and `D(S)` in the second. Therefore:
 
 ```text
 D(V) = D(S)                                         (A8)
