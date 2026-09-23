@@ -287,7 +287,8 @@ premises to use that lemma:
    N(N(C) + N(R)) = N(C) + S
    ```
 
-All three premises hold, so Lemma 9 gives:
+All three premises hold, so
+[Lemma 9](#lemma-9-the-unchanged-prefix-lemma) gives:
 
 ```text
 S = N(R)  (7)
@@ -778,7 +779,8 @@ candidate `C` in the original text, or at the end of its complete normalization
 result `N(C)` in the normalized text. This lemma shows that neither cut can fall
 between the two UTF-16 code units of a supplementary code point. The proof
 needs this guarantee before treating a span of normalized text as a Unicode
-substring and applying Lemma 7.
+substring and applying
+[Lemma 7](#lemma-7-a-substring-of-normalized-text-is-normalized).
 
 We must prove that two kinds of comparison cuts are code-point-aligned:
 
@@ -1169,11 +1171,12 @@ recursive decomposition followed by canonical ordering.
 Consequently, `D(X)` and `D(Y)` have each already been canonically ordered, but
 their concatenation may still need additional ordering across the point where
 the pieces meet. Canonically ordering `D(X) + D(Y)` performs that remaining
-work. By Lemma 4, the ordering is stable, so this produces the same result as
-canonically ordering the complete raw decomposition of `X + Y` at once: each
-maximal stretch of nonstarters ends up in nondecreasing `ccc` order, and within
-each class the entries from `X` keep their original order and come before the
-entries from `Y`. Lemma 9's proof below walks through the
+work. By [Lemma 4](#lemma-4-canonical-ordering-is-stable), the ordering is
+stable, so this produces the same result as canonically ordering the complete
+raw decomposition of `X + Y` at once: each maximal stretch of nonstarters ends
+up in nondecreasing `ccc` order, and within each class the entries from `X`
+keep their original order and come before the entries from `Y`.
+[Lemma 9's proof](#lemma-9-the-unchanged-prefix-lemma) below walks through the
 same merge in detail. This proves equation (A2).
 
 ### Lemma 6: Equal decompositions give equal normalized forms
@@ -1189,7 +1192,8 @@ premise `D(X) = D(Y)` already says `N(X) = N(Y)`.
 
 When `N` is FormC or FormKC, the
 [two-step normalization table](#uax-15-two-step-normalization-table) in
-Lemma 3 includes these two entries:
+[Lemma 3](#lemma-3-normalization-preserves-the-decomposition) includes these
+two entries:
 
 ```text
 toNFC(x)  = toNFC(toNFD(x))
@@ -1208,13 +1212,15 @@ These entries give the required result directly:
   Normalizing that string to FormKC must therefore give the same result in
   both cases, so `FormKC(X) = FormKC(Y)`.
 
-Definitions D120 and D121 (also quoted in Lemma 2) say the same thing
-directly. FormC is “the Canonical Composition of the Canonical Decomposition
-of a coded character sequence” and FormKC is “the Canonical Composition of the
-Compatibility Decomposition of a coded character sequence”, and the Canonical
-Composition Algorithm (definition D117, quoted in Lemma 2) is a deterministic
-procedure on the decomposed sequence. Equal decompositions feed equal input to
-the same procedure.
+Definitions D120 and D121 (also quoted in
+[Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary)) say the
+same thing directly. FormC is “the Canonical Composition of the Canonical
+Decomposition of a coded character sequence” and FormKC is “the Canonical
+Composition of the Compatibility Decomposition of a coded character sequence”,
+and the Canonical Composition Algorithm (definition D117, quoted in
+[Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary)) is a
+deterministic procedure on the decomposed sequence. Equal decompositions feed
+equal input to the same procedure.
 
 In either case, the selected `N` gives `N(X) = N(Y)`, as required.
 
@@ -1227,8 +1233,9 @@ UAX #15 states:
 > (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
 
 Therefore any substring cut from normalized text at code-point boundaries is
-normalized on its own. Lemma 2 establishes that the cuts used here satisfy that
-condition.
+normalized on its own.
+[Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary)
+establishes that the cuts used here satisfy that condition.
 
 ### Lemma 8: Normalizing a concatenation directly equals normalizing its parts, then the whole
 
@@ -1242,7 +1249,8 @@ In words, normalizing two concatenated strings produces the same result as
 normalizing each string first, concatenating those results, and then
 normalizing the complete concatenation.
 
-Lemma 5, equation (A2), is the following general rule:
+[Lemma 5](#lemma-5-decomposing-a-concatenation-orders-the-two-decompositions-together),
+equation (A2), is the following general rule:
 
 ```text
 D(left + right)
@@ -1256,15 +1264,17 @@ D(N(X) + N(Y))
     = canonically order (D(N(X)) + D(N(Y)))         (A3)
 ```
 
-Lemma 3, equation (A1), says that `D(N(X)) = D(X)` and
-`D(N(Y)) = D(Y)`. Substitute those equal strings into equation (A3):
+[Lemma 3](#lemma-3-normalization-preserves-the-decomposition), equation (A1),
+says that `D(N(X)) = D(X)` and `D(N(Y)) = D(Y)`. Substitute those equal
+strings into equation (A3):
 
 ```text
 D(N(X) + N(Y))
     = canonically order (D(X) + D(Y))
 ```
 
-Lemma 5, equation (A2), also says:
+[Lemma 5](#lemma-5-decomposing-a-concatenation-orders-the-two-decompositions-together),
+equation (A2), also says:
 
 ```text
 D(X + Y) = canonically order (D(X) + D(Y))
@@ -1278,9 +1288,10 @@ D(N(X) + N(Y)) = D(X + Y)                          (A4)
 ```
 
 Equation (A4) states that the two strings `N(X) + N(Y)` and `X + Y` have the
-same decomposition. Lemma 6 says that two strings with the same decomposition
-have the same normalized form. Applying that lemma directly to these
-two strings gives:
+same decomposition.
+[Lemma 6](#lemma-6-equal-decompositions-give-equal-normalized-forms) says that
+two strings with the same decomposition have the same normalized form. Applying
+that lemma directly to these two strings gives:
 
 ```text
 N(N(X) + N(Y)) = N(X + Y)
@@ -1320,10 +1331,12 @@ The proof has five steps.
 #### Proof step 1: `S` is normalized
 
 `N(Q + V)` is normalized. The premise says that it's equal to `Q + S`.
-Because `Q` is normalized, it's a sequence of complete code points. It's an
-exact prefix of `N(Q + V)`, so the cut after `Q` is a code-point boundary.
-Thus `S` is a code-point-aligned suffix (and therefore a substring) of
-normalized text. Lemma 7 states that such a substring is normalized.
+Because `Q` is normalized (assumption of the lemma), it's a sequence of
+complete code points. It's an exact prefix of `N(Q + V)`, so the cut after
+`Q` is a code-point boundary. Thus `S` is a code-point-aligned suffix (and
+therefore a substring) of normalized text.
+[Lemma 7](#lemma-7-a-substring-of-normalized-text-is-normalized) states that
+such a substring is normalized.
 Therefore `S` is normalized too.
 
 #### Proof step 2: Derive equality of the two ordered decompositions
@@ -1341,14 +1354,16 @@ Fully decompose both equal strings. In other words, apply the same function
 D(N(Q + V)) = D(Q + S)
 ```
 
-Lemma 3, equation (A1), states that `D(N(X)) = D(X)`. With `X = Q + V`, it
-allows us to replace the left side `D(N(Q + V))` with `D(Q + V)`:
+[Lemma 3](#lemma-3-normalization-preserves-the-decomposition), equation (A1),
+states that `D(N(X)) = D(X)`. With `X = Q + V`, it allows us to replace the
+left side `D(N(Q + V))` with `D(Q + V)`:
 
 ```text
 D(Q + V) = D(Q + S)                                (A6)
 ```
 
-Lemma 5, equation (A2), states:
+[Lemma 5](#lemma-5-decomposing-a-concatenation-orders-the-two-decompositions-together),
+equation (A2), states:
 
 ```text
 D(left + right)
@@ -1382,18 +1397,18 @@ because canonical ordering has been applied to each entire concatenation and
 may move some of its code points. To prove `D(V) = D(S)`, we must first
 determine exactly how ordering can mix the two concatenated inputs.
 
-Lemma 4 states that starters remain fixed and can't be crossed, while each
-stretch of nonstarters is stably ordered by `ccc`. Therefore only the trailing
-nonstarters of `D(Q)` and the leading nonstarters of the following
-decomposition (`D(V)` on the left side of equation (A7), or `D(S)` on the
-right) can intermix.
+[Lemma 4](#lemma-4-canonical-ordering-is-stable) states that starters remain
+fixed and can't be crossed, while each stretch of nonstarters is stably
+ordered by `ccc`. Therefore only the trailing nonstarters of `D(Q)` and the
+leading nonstarters of the following decomposition (`D(V)` on the left side of
+equation (A7), or `D(S)` on the right) can intermix.
 
-In this procedure, the *following string* is `D(V)` on the left side of
+For brevity, we'll use the term *following string* to refer to `D(V)` on the left side of
 equation (A7) or `D(S)` on the right. Given the known `D(Q)` and the result of
-canonically ordering `D(Q) + following string`, the procedure recovers the
+canonically ordering `D(Q) + following string`, the recovery procedure below recovers the
 *following string*.
 
-To separate their contributions, first split the known string `D(Q)` into two
+Here's how: To separate their contributions, first split the known string `D(Q)` into two
 parts:
 
 ```text
@@ -1512,8 +1527,9 @@ D(V) = D(S)                                         (A8)
 ```
 
 Equation (A8) says directly that `S` and `V` have the same decomposition `D`.
-Lemma 6 states that strings with the same decomposition have the same normalized
-form. Therefore:
+[Lemma 6](#lemma-6-equal-decompositions-give-equal-normalized-forms) states
+that strings with the same decomposition have the same normalized form.
+Therefore:
 
 ```text
 N(V) = N(S)                                         (A9)
