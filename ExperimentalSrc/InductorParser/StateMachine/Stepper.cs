@@ -725,7 +725,7 @@ internal static class Stepper
     // LoadPeekedRune peeks the next rune at the current lexer position
     // (without consuming) and stashes the value on machine.PeekedRune.
     // EOF or a stray surrogate yields -1, which fails membership in
-    // any non-Universe set. Always succeeds.
+    // any non-ScalarUniverse set. Always succeeds.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_LoadPeekedRune(in State state, ref Machine machine)
     {

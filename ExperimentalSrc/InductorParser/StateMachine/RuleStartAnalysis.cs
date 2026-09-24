@@ -15,7 +15,7 @@ namespace InductorParser.StateMachine;
 // One walk, post-order, with cycle detection. A rule's RuleStartRequirements
 // reads its children's, so children are computed first. When a cycle is hit
 // (LateBoundRule pointing back into an Or that contains it), the in-progress
-// rule keeps the pessimistic default (Universe, Sometimes, MustBeIn). That's
+// rule keeps the pessimistic default (ScalarUniverse, Sometimes, MustBeIn). That's
 // safe: the Lowerer's shortcut sites bail when the requirements look
 // pessimistic, so the dispatch falls through to the general path.
 //

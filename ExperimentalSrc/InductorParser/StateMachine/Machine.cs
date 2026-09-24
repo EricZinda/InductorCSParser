@@ -49,7 +49,7 @@ internal struct Machine
     // Updated by LoadPeekedRune at each Or entry, read by
     // per-alternative CheckPeekedRuneInSet states. -1 means "no rune
     // available" (EOF or stray surrogate), which fails membership in
-    // any non-Universe set.
+    // any non-ScalarUniverse set.
     public int PeekedRune;
 
     // Start position of the most recent successful token read by a

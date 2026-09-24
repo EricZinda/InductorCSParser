@@ -238,7 +238,7 @@ public readonly struct TokenSet : IEquatable<TokenSet>
     public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace | LineTerminators
     public static TokenSet XidStart         { get; }  // may begin an identifier per UAX #31 (XID_Start)
     public static TokenSet XidContinue      { get; }  // may continue an identifier per UAX #31 (XID_Continue)
-    public static TokenSet Universe         { get; }  // every scalar 0..0x10FFFF except surrogates
+    public static TokenSet ScalarUniverse   { get; }  // every scalar 0..0x10FFFF except surrogates
     public static TokenSet Surrogates       { get; }  // U+D800..U+DFFF, the only way surrogates enter a set
     public static TokenSet Replacement      { get; }  // U+FFFD REPLACEMENT CHARACTER
     public static TokenSet Empty            { get; }  // no members, the same as default(TokenSet)
@@ -300,15 +300,15 @@ TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU")
 TokenSet.XidContinue - TokenSet.Runes("_")
 ```
 
-`a - b` keeps `a`'s multi-rune grapheme members (CRLF, a skin-toned emoji) that `b` doesn't contain, so subtracting a rune from a set leaves its clusters alone. For "everything except these categories," subtract from `TokenSet.Universe`, the surrogate-free scalar universe:
+`a - b` keeps `a`'s multi-rune grapheme members (CRLF, a skin-toned emoji) that `b` doesn't contain, so subtracting a rune from a set leaves its clusters alone. For "everything except these categories," subtract from `TokenSet.ScalarUniverse`, the surrogate-free scalar universe:
 
 ```csharp
 // Any printable non-whitespace character: all runes minus the
 // categories you don't want.
-TokenSet.Universe - (TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
+TokenSet.ScalarUniverse - (TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
 ```
 
-One caveat on `Universe`: it holds single scalar values only, never a multi-rune cluster (the set of all clusters is effectively infinite, so a "universe" only makes sense at the scalar level). That means `OneOf(Universe - X)` never matches a multi-rune token like CRLF or a skin-toned emoji, while the rule-level `NoneOf(X)` matches any token that isn't in X, multi-rune included. Pick `NoneOf` when "everything except" needs to cover arbitrary clusters, and `Universe - X` when you want a class you can keep composing with `|`, `&`, and `-`.
+One caveat on `ScalarUniverse`: it holds single scalar values only, never a multi-rune cluster (the set of all clusters is effectively infinite, so a "universe" only makes sense at the scalar level). That means `OneOf(ScalarUniverse - X)` never matches a multi-rune token like CRLF or a skin-toned emoji, while the rule-level `NoneOf(X)` matches any token that isn't in X, multi-rune included. Pick `NoneOf` when "everything except" needs to cover arbitrary clusters, and `ScalarUniverse - X` when you want a class you can keep composing with `|`, `&`, and `-`.
 
 Internally a `TokenSet` is a sorted array of rune ranges plus a sorted array of multi-rune graphemes. Intersection and difference are single linear passes over the sorted arrays, and union re-sorts the combined range list. Compound expressions are evaluated at construction, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it. Membership testing scans the first few ranges linearly and binary-searches the rest, which matters because the built-ins are bigger than they look: `Letters` is about 660 ranges.
 

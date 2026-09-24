@@ -477,13 +477,13 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_universe_rejects_a_lone_surrogate_input_under_null_normalization()
     {
-        // Universe is the scalar-value universe: every code point except
+        // ScalarUniverse is the scalar-value universe: every code point except
         // the surrogate block. Surrogates aren't
-        // in Universe, so even under Compile(null) where the lexer
-        // surfaces a lone surrogate as a one-char token, OneOf(Universe)
+        // in ScalarUniverse, so even under Compile(null) where the lexer
+        // surfaces a lone surrogate as a one-char token, OneOf(ScalarUniverse)
         // doesn't match it. A grammar that wants surrogates writes
-        // `Universe | Surrogates` (or just `Surrogates`).
-        var rule = OneOf(TokenSet.Universe);
+        // `ScalarUniverse | Surrogates` (or just `Surrogates`).
+        var rule = OneOf(TokenSet.ScalarUniverse);
         rule.Compile(normalizeInput: null);
 
         var result = rule.Parse(HighSurrogateMinText);

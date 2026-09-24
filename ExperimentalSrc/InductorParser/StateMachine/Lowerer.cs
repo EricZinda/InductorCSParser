@@ -423,7 +423,7 @@ internal sealed class LoweringContext
         // Decide whether this Or benefits from the first-rune-skip
         // optimization. We need at least one alternative whose
         // FirstConsumedTokens is non-trivial (Advance.Always and
-        // strictly smaller than Universe), and skipping has to be
+        // strictly smaller than ScalarUniverse), and skipping has to be
         // safe under the existing semantics: alternatives carrying
         // a custom WithError still need to run so their message can
         // surface.
@@ -554,10 +554,10 @@ internal sealed class LoweringContext
         var requirements = Analysis.Get(child);
         if (requirements.Advance != Advance.Always) return false;
         if (Analysis.HasError(child)) return false;
-        // FirstConsumedTokens equality with Universe means the set
+        // FirstConsumedTokens equality with ScalarUniverse means the set
         // accepts any rune, so the peek check would never skip. Avoid
         // the wasted state.
-        if (requirements.FirstConsumedTokens.Equals(TokenSet.Universe)) return false;
+        if (requirements.FirstConsumedTokens.Equals(TokenSet.ScalarUniverse)) return false;
         // MustNotBeIn polarity inverts the membership test: peek IN
         // set => rule definitely fails. The SM's CheckPeekedRuneInSet
         // opcode tests the positive direction (peek IN set => alt is
@@ -895,7 +895,7 @@ internal sealed class LoweringContext
             }
         }
 
-        if (candidates.IsEmpty || candidates == TokenSet.Universe) return false;
+        if (candidates.IsEmpty || candidates == TokenSet.ScalarUniverse) return false;
 
         candidates.TryGetBmpChars(maxChars: 256, out var bmpCandidates);
         LiteralScannerCandidate[]? literals =

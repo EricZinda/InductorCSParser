@@ -78,7 +78,7 @@ namespace InductorParser.StateMachine;
 // Notes:
 //   * A superset of actual first-consumed tokens is safe under MustBeIn
 //     (just slower). A subset would cause enclosing rules to wrongly
-//     skip a rule that could succeed. TokenSet.Universe with MustBeIn
+//     skip a rule that could succeed. TokenSet.ScalarUniverse with MustBeIn
 //     means "I don't know, don't filter me."
 //   * Under MustNotBeIn, a subset of actual fail-tokens is safe (just
 //     skips fewer than possible). A superset would cause enclosing
@@ -109,7 +109,7 @@ namespace InductorParser.StateMachine;
 // test should flip.
 internal enum Polarity { MustBeIn, MustNotBeIn }
 
-// Populated by RuleStartAnalysis. The pessimistic defaults (Universe,
+// Populated by RuleStartAnalysis. The pessimistic defaults (ScalarUniverse,
 // Sometimes, MustBeIn) mean any rule that doesn't get a more specific
 // answer is safe: it'll never be shortcutted out.
 internal readonly record struct RuleStartRequirements(
@@ -131,25 +131,25 @@ internal readonly record struct RuleStartRequirements(
         new(TokenSet.Empty, Advance.Never, Polarity.MustBeIn);
 
     // "My rule ALWAYS ADVANCES BY ONE TOKEN": consumes exactly one
-    // token, no constraint on which. Universe + Always + MustBeIn:
-    // the shortcut never filters this rule because Universe accepts
+    // token, no constraint on which. ScalarUniverse + Always + MustBeIn:
+    // the shortcut never filters this rule because ScalarUniverse accepts
     // every peek. Use for: AnyToken.
     public static readonly RuleStartRequirements AlwaysAdvancesByOneToken =
-        new(TokenSet.Universe, Advance.Always, Polarity.MustBeIn);
+        new(TokenSet.ScalarUniverse, Advance.Always, Polarity.MustBeIn);
 
     // "My rule MAY ADVANCE BY ANY TOKENS": may consume zero or more
     // tokens, no upfront filter on what's accepted. Advance.Sometimes
     // keeps the rule out of the shortcut entirely. Use for:
     // ScanUntil.
     public static readonly RuleStartRequirements MayAdvanceByAnyTokens =
-        new(TokenSet.Universe, Advance.Sometimes, Polarity.MustBeIn);
+        new(TokenSet.ScalarUniverse, Advance.Sometimes, Polarity.MustBeIn);
 
     // Default pessimistic value for any rule whose shape the analysis
     // doesn't recognize (user-defined Rule subclasses, etc.). Same shape
-    // a virtual default would produce: Universe + Sometimes + MustBeIn,
+    // a virtual default would produce: ScalarUniverse + Sometimes + MustBeIn,
     // which the shortcut never filters.
     public static readonly RuleStartRequirements Pessimistic =
-        new(TokenSet.Universe, Advance.Sometimes, Polarity.MustBeIn);
+        new(TokenSet.ScalarUniverse, Advance.Sometimes, Polarity.MustBeIn);
 
     // "My rule['s] FIRST TOKEN MUST BE IN [this] SET". Consumes one
     // token on success (Advance.Always), polarity MustBeIn. The
@@ -202,7 +202,7 @@ internal readonly record struct RuleStartRequirements(
     //     MustNotBeIn requires Always (the invariant rejects any
     //     other combination), so polarity drops to MustBeIn. The
     //     original set was a fail-set and can't carry over under that
-    //     polarity. Use Universe (the noncommittal "no constraint on
+    //     polarity. Use ScalarUniverse (the noncommittal "no constraint on
     //     first token") instead.
     //
     //   * newAdvance is non-Always and the original was MustBeIn:
@@ -213,7 +213,7 @@ internal readonly record struct RuleStartRequirements(
         if (newAdvance == Advance.Always)
             return new RuleStartRequirements(FirstConsumedTokens, newAdvance, Polarity);
         if (Polarity == Polarity.MustNotBeIn)
-            return new RuleStartRequirements(TokenSet.Universe, newAdvance, Polarity.MustBeIn);
+            return new RuleStartRequirements(TokenSet.ScalarUniverse, newAdvance, Polarity.MustBeIn);
         return new RuleStartRequirements(FirstConsumedTokens, newAdvance, Polarity.MustBeIn);
     }
 
@@ -257,7 +257,7 @@ internal readonly record struct RuleStartRequirements(
             ? Advance.Always
             : allNever ? Advance.Never : Advance.Sometimes;
         if (advance != Advance.Always && runningPolarity == Polarity.MustNotBeIn)
-            return new RuleStartRequirements(TokenSet.Universe, advance, Polarity.MustBeIn);
+            return new RuleStartRequirements(TokenSet.ScalarUniverse, advance, Polarity.MustBeIn);
         return new RuleStartRequirements(runningSet, advance, runningPolarity);
     }
 
@@ -299,7 +299,7 @@ internal readonly record struct RuleStartRequirements(
         }
         Advance advance = anyMightConsume ? Advance.Sometimes : Advance.Never;
         if (advance != Advance.Always && runningPolarity == Polarity.MustNotBeIn)
-            return new RuleStartRequirements(TokenSet.Universe, advance, Polarity.MustBeIn);
+            return new RuleStartRequirements(TokenSet.ScalarUniverse, advance, Polarity.MustBeIn);
         return new RuleStartRequirements(runningSet, advance, runningPolarity);
     }
 
@@ -358,7 +358,7 @@ internal readonly record struct RuleStartRequirements(
         TokenSet positiveRunes = positiveSet.HasMultiRuneGraphemes
             ? positiveSet.RunesOnlyPart
             : positiveSet;
-        TokenSet difference = negativeSet & (TokenSet.Universe - positiveRunes);
+        TokenSet difference = negativeSet & (TokenSet.ScalarUniverse - positiveRunes);
         return (difference, Polarity.MustNotBeIn);
     }
 }

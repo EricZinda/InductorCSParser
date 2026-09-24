@@ -205,7 +205,7 @@ NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // True
 
 `NoneOf(set)` matches any token whose value isn't in `set`. A lone surrogate isn't in `set`, so it passes.
 
-**Fix.** Decide whether you actually want lone surrogates. If you're sweeping raw or possibly-malformed content under `Compile(null)` (WTF-8 round-tripping, lenient handling of unpaired surrogates), `NoneOf` admitting them is usually exactly what you want, so leave it. If you want to exclude them, match against the surrogate-free scalar universe instead: `OneOf(TokenSet.Universe - stopSet)`. `Universe` leaves out the surrogate block, so a lone surrogate isn't a member and the rule won't match it. And remember it only matters under `Compile(null)`: the default `FormC` compile rejects the malformed input upstream, before the rule runs.
+**Fix.** Decide whether you actually want lone surrogates. If you're sweeping raw or possibly-malformed content under `Compile(null)` (WTF-8 round-tripping, lenient handling of unpaired surrogates), `NoneOf` admitting them is usually exactly what you want, so leave it. If you want to exclude them, match against the surrogate-free scalar universe instead: `OneOf(TokenSet.ScalarUniverse - stopSet)`. `ScalarUniverse` leaves out the surrogate block, so a lone surrogate isn't a member and the rule won't match it. And remember it only matters under `Compile(null)`: the default `FormC` compile rejects the malformed input upstream, before the rule runs.
 
 
 ## Token Segmentation Across Runtimes

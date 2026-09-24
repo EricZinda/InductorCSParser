@@ -877,7 +877,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// grapheme clusters (see remarks).
     /// </summary>
     /// <remarks>
-    /// Handy as the base for "everything except X" sets: <c><see cref="TokenSet.Universe">Universe - someSet</see></c>
+    /// Handy as the base for "everything except X" sets: <c><see cref="TokenSet.ScalarUniverse">ScalarUniverse - someSet</see></c>
     /// is the composable <see cref="InductorParser.TokenSet">TokenSet</see> form of <c><see cref="Rules.NoneOf(TokenSet)">NoneOf(X)</see></c>, and you can keep
     /// combining it with <c>|</c>, <c>&amp;</c>, and <c>-</c>. Leaving the
     /// surrogate block out keeps that subtraction safe: a grammar that asks for
@@ -886,16 +886,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// It holds single scalar values only, never a multi-rune grapheme cluster.
     /// You can enumerate every code point in a bounded range, but not the
     /// open-ended set of all clusters since it is effectively infinite, so a "universe" only makes sense at the
-    /// scalar level. The consequence: <c><see cref="Rules.OneOf(TokenSet)">OneOf(Universe)</see></c> matches a
+    /// scalar level. The consequence: <c><see cref="Rules.OneOf(TokenSet)">OneOf(ScalarUniverse)</see></c> matches a
     /// single-scalar token but never a multi-rune grapheme like CRLF or a
-    /// skin-toned emoji, and <c><see cref="TokenSet.Universe">Universe - X</see></c> leaves those tokens out too
+    /// skin-toned emoji, and <c><see cref="TokenSet.ScalarUniverse">ScalarUniverse - X</see></c> leaves those tokens out too
     /// (they were never in it). To match any token at all, use <see cref="Rules.AnyToken"/>.
     /// To include specific clusters, add them with <c><see cref="TokenSet.Graphemes">Graphemes(...)</see></c>, like
-    /// <c><see cref="TokenSet.Graphemes">Universe | Graphemes("\r\n")</see></c>.
+    /// <c><see cref="TokenSet.Graphemes">ScalarUniverse | Graphemes("\r\n")</see></c>.
     /// </para>
     /// </remarks>
-    public static TokenSet Universe => _universe;
-    private static readonly TokenSet _universe = Range(0, 0x10FFFF);
+    public static TokenSet ScalarUniverse => _scalarUniverse;
+    private static readonly TokenSet _scalarUniverse = Range(0, 0x10FFFF);
 
     /// <summary>
     /// All surrogate code units U+D800..U+DFFF as a TokenSet. Matchable only by
