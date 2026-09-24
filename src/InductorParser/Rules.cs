@@ -98,7 +98,7 @@ public static class Rules
     /// cluster), so this matches when the user sees one bare
     /// <c>r</c> at the current position. It fails when <c>r</c> is
     /// followed by Unicode characters that tell the renderer to
-    /// glue them all into a single composed character, because
+    /// glue them all into a single grapheme cluster, because
     /// then the user sees one combined character at that position,
     /// not a bare <c>r</c>.
     /// To match that combined character, pass the whole thing as a
@@ -119,7 +119,7 @@ public static class Rules
     /// cluster), so this matches when the user sees the given rune
     /// standing alone at the current position. It fails when the
     /// rune is followed by Unicode characters that tell the
-    /// renderer to glue them all into a single composed character,
+    /// renderer to glue them all into a single grapheme cluster,
     /// because then the user sees one combined character at that
     /// position, not the bare rune.
     /// To match that combined character, pass the whole thing as a
