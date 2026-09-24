@@ -254,15 +254,23 @@ public readonly partial struct TokenSet
     private static readonly Lazy<TokenSet> _xidStart = new Lazy<TokenSet>(BuildXidStart);
     private static readonly Lazy<TokenSet> _xidContinue = new Lazy<TokenSet>(BuildXidContinue);
 
+    // The XidStart and XidContinue remarks below say "the underscore" in
+    // prose and keep the literal "_" inside a <code> block on purpose. DocFX
+    // runs a Markdown pass over doc comments, and two bare underscores in
+    // one paragraph pair up as emphasis and vanish from the rendered page
+    // (the old XidStart text lost both of its quoted underscores that way).
+    // Inside a <code> block they're left alone.
     /// <summary>
     /// The set of Unicode scalar values that may begin an identifier per
     /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> R1 (XID_Start). Use together with <see cref="XidContinue"/> and
     /// <see cref="Rules.Identifier"/> for spec-compliant identifier matching.
     /// </summary>
     /// <remarks>
-    /// Doesn't include "_". For the programming-language profile that allows a
-    /// leading underscore, use
-    /// Rules.Identifier(extraStartRunes: TokenSet.Runes("_")).
+    /// Doesn't include the underscore. For the programming-language profile
+    /// that allows a leading underscore, add it as an extra start rune:
+    /// <code>
+    /// Rules.Identifier(extraStartRunes: TokenSet.Runes("_"))
+    /// </code>
     /// </remarks>
     public static TokenSet XidStart => _xidStart.Value;
 
@@ -272,7 +280,7 @@ public readonly partial struct TokenSet
     /// </summary>
     /// <remarks>
     /// Includes everything in <see cref="XidStart"/> plus combining marks,
-    /// decimal digits, and connector punctuation (e.g. "_").
+    /// decimal digits, and connector punctuation such as the underscore.
     /// </remarks>
     public static TokenSet XidContinue => _xidContinue.Value;
 }

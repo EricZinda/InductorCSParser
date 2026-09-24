@@ -1104,10 +1104,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// Build a set whose members are one or more grapheme clusters.
     /// Each array element must be exactly one grapheme (one full <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
     /// text element). Passing a string with multiple graphemes throws.
-    /// Use this when the set members are graphemes: CRLF, a decomposed
-    /// <c>a + U+0301</c>, a joined family emoji, skin-toned faces,
-    /// regional-indicator flags. For sets of runes (the common ASCII
-    /// case), use <see cref="Runes(string)"/>.
+    /// Use this when the set members are graphemes, for example CRLF, a
+    /// decomposed <c>a + U+0301</c>, a joined family emoji, a skin-toned
+    /// face, or a regional-indicator flag. For sets of runes (the common
+    /// ASCII case), use <see cref="Runes(string)"/>.
     /// </summary>
     /// <exception cref="ArgumentException">
     /// <paramref name="clusters"/> contains a null element, an empty
