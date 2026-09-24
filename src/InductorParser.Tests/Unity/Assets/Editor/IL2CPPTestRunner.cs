@@ -31,8 +31,11 @@ namespace InductorParser.Editor
     // EditorApplication.Exit with the result code.
     public static class IL2CPPTestRunner
     {
-        // NUnit XML results file, anchored to the repo root. The Unity
-        // project lives at <repo>/src/InductorParser.Tests/Unity/, so
+        // NUnit XML results file. runil2cpptest.sh runs Unity against a
+        // temporary copy of the project, so it passes the destination
+        // explicitly as -inductorResultsPath. Without that argument (the
+        // checked-in project opened by hand), fall back to the repo root:
+        // the project lives at <repo>/src/InductorParser.Tests/Unity/, so
         // the repo root is three parents above Application.dataPath
         // (which is <repo>/src/InductorParser.Tests/Unity/Assets).
         // Deriving from Application.dataPath avoids relying on Unity's

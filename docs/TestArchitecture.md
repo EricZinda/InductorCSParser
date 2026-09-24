@@ -94,10 +94,13 @@ UNITY_VERSION=6000.3.13f1 ./src/InductorParser.Tests/runil2cpptest.sh
 UNITY_EDITOR=/path/to/Unity ./src/InductorParser.Tests/runil2cpptest.sh
 ```
 
-The script opens a temporary copy of the Unity project, so another editor
-version can't upgrade or dirty the checked-in project. These overrides are
-exploratory: a version becomes part of the supported matrix only when it's
-added to the default configuration.
+The script copies the Unity project into `test-results/` (gitignored), opens
+that copy, and deletes it when the script exits, so another editor version
+can't upgrade or dirty the checked-in project. The copy sits next to the
+results rather than in the shell's temp directory because, under WSL, `/tmp`
+is on the Linux filesystem and reaches Windows Unity as a network path. These
+overrides are exploratory: a version becomes part of the supported matrix only
+when it's added to the default configuration.
 
 ## What Every Rule's Test File Needs
 
@@ -275,7 +278,7 @@ host-independent behavior should select `UnicodeImplementation.Bundled`.
 ./src/InductorParser.Tests/runil2cpptest.sh
 ```
 
-The script syncs the test sources from `{Core,Rules,E2EExamples}/` (plus the Prolog fixture corpus) into a temporary copy of the Unity project and runs them, about 7,200 tests once the corpus-driven matrices expand, on an IL2CPP Standalone player it builds. `DocExamples/`, `Fuzzing/`, and `Lexing/` don't sync and stay CoreCLR-only (`Lexing/` holds the differential tests that compare the built-in segmenter and normalizer against CoreCLR's `StringInfo` and `string.Normalize`, which only mean something on CoreCLR). Results land in `test-results/` at the repo root. By default it needs Unity 6000.3.13f1 (the version in `ProjectVersion.txt`) with the IL2CPP module installed, and it preflight-checks both before spending minutes on Unity's startup. Set `UNITY_VERSION` or `UNITY_EDITOR` as described in the platform section to try another editor safely.
+The script syncs the test sources from `{Core,Rules,E2EExamples}/` (plus the Prolog fixture corpus) into a temporary copy of the Unity project under `test-results/` and runs them, about 7,200 tests once the corpus-driven matrices expand, on an IL2CPP Standalone player it builds. `DocExamples/`, `Fuzzing/`, and `Lexing/` don't sync and stay CoreCLR-only (`Lexing/` holds the differential tests that compare the built-in segmenter and normalizer against CoreCLR's `StringInfo` and `string.Normalize`, which only mean something on CoreCLR). Results land in `test-results/` at the repo root. By default it needs Unity 6000.3.13f1 (the version in `ProjectVersion.txt`) with the IL2CPP module installed, and it preflight-checks both before spending minutes on Unity's startup. Set `UNITY_VERSION` or `UNITY_EDITOR` as described in the platform section to try another editor safely.
 
 The same tests behave the same on both platforms because both platforms segment and normalize the same way. On CoreCLR the tests run against the runtime's `StringInfo` and `string.Normalize`. Under IL2CPP they run against the library's built-in segmenter and normalizer. The differential tests validate the built-in implementations against both supported CoreCLR runtimes (normalization is compared everywhere except the code points Unicode 16.0 added), so a grapheme-heavy or normalization-heavy test can't pass on one platform and fail on the other over the compared Unicode data.
 

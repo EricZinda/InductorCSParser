@@ -22,8 +22,10 @@
 #   - Unity not open on the Unity/ project at the same time
 #
 # Results land in test-results/il2cpp-playmode-results.xml at the repo
-# root; Unity log lands in test-results/il2cpp-log.txt. Exits non-zero on
-# test failure or if a required component is missing.
+# root and the Unity log in test-results/il2cpp-log.txt. Unity runs
+# against a temporary copy of the project, also under test-results/,
+# that is deleted when the script exits. Exits non-zero on test failure
+# or if a required component is missing.
 
 set -e
 
@@ -142,8 +144,10 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 rm -f "$RESULTS_XML" "$UNITY_LOG"
-# wslpath -w can only convert paths that exist, and the log file is
-# handed to Unity in Windows form below, so create it empty up front.
+# The log file is handed to Unity in Windows form below, and wslpath -w
+# has been seen to refuse a path that doesn't exist yet, so create it
+# empty up front. (Current WSL builds convert missing paths fine, so this
+# is cheap insurance rather than a hard requirement.)
 touch "$UNITY_LOG"
 
 echo "=== Building netstandard2.1 InductorParser.dll ==="
@@ -169,7 +173,14 @@ echo "=== Syncing test sources into Unity PlayMode ==="
 # Run Unity against a disposable copy. Opening a project in another Unity
 # version can rewrite ProjectSettings, package locks, and imported metadata.
 # None of those exploratory changes should touch the working tree.
-TEMP_UNITY_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/inductor-parser-unity.XXXXXX")"
+#
+# The copy lives under test-results/ (gitignored), not in the shell's
+# temp directory. Under WSL, /tmp is on the Linux filesystem and reaches
+# Windows Unity as a \\wsl.localhost\... network path, which Unity doesn't
+# support as a project location. The repo itself already has to be
+# somewhere the Unity executable can open, so a copy next to the results
+# is reachable from whichever shell started the script.
+TEMP_UNITY_ROOT="$(mktemp -d "$RESULTS_DIR/unity-project.XXXXXX")"
 RUN_UNITY_PROJECT="$TEMP_UNITY_ROOT/Unity"
 cleanup_unity_copy() {
     if [ -n "${TEMP_UNITY_ROOT:-}" ] && [ -d "$TEMP_UNITY_ROOT" ] && [ "$TEMP_UNITY_ROOT" != "/" ]; then
