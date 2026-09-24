@@ -500,25 +500,42 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// Returns a copy of this set with every entry that isn't already in
-    /// <paramref name="form"/> projected through <c><see cref="string.Normalize(System.Text.NormalizationForm)">Normalize(form)</see></c>. An
-    /// entry whose conversion is a single
-    /// rune is replaced by that rune. An entry whose conversion is a single
-    /// grapheme spanning several runes (e.g. "e + combining acute" under
-    /// FormD) is added as a multi-rune grapheme member. An entry whose
-    /// conversion is multiple graphemes (e.g. the single grapheme fi-ligature under FormKC
-    /// becomes the two members 'f' and 'i') is split into one member per
-    /// grapheme. Entries already in <paramref name="form"/> pass through
-    /// unchanged.
+    /// <paramref name="form"/> normalized to it. An entry whose normalized
+    /// form is a single rune is replaced by that rune. An entry whose
+    /// normalized form is a single grapheme spanning several runes (e.g.
+    /// "e + combining acute" under FormD) is added as a multi-rune grapheme
+    /// member. An entry whose normalized form is several graphemes (e.g. the
+    /// single grapheme fi-ligature under FormKC becomes the two members 'f'
+    /// and 'i') is split into one member per grapheme. Entries already in
+    /// <paramref name="form"/> pass through unchanged.
     /// </summary>
     /// <remarks>
-    /// You call this on a set yourself. Nothing in the parser calls it for you,
-    /// so it's opt-in: use it to project a set's members into a normalization
-    /// form ahead of time. The usual reason is a <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see>/<see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> member that a
-    /// FormKC or FormKD <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> would turn into more than one grapheme, like the
-    /// ﬁ ligature becoming "fi". A set member has to be a single grapheme, so
-    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> can't make that expansion for you. It errors and points you here.
-    /// Call this first to split the entry into separate members ('f' and 'i'),
-    /// then <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> with that same form so the input is normalized to match.
+    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> already normalizes every set member to the grammar's
+    /// form, so you don't need this for ordinary accents: a precomposed é and
+    /// a decomposed e + U+0301 match either way. This method is for the
+    /// compatibility forms, FormKC and FormKD, where one character can
+    /// normalize into several. The ﬁ ligature (U+FB01) becomes the two
+    /// letters "fi". A <see cref="InductorParser.Rules.OneOf(TokenSet)">OneOf</see> matches exactly one token, and a token is
+    /// one grapheme, so a member that has become two graphemes no longer fits
+    /// in the set, and Compile throws rather than guess what you meant.
+    /// <para>
+    /// You have two ways to resolve that, and they match different things.
+    /// To match the ligature as one unit, take it out of the set and match it
+    /// with <see cref="Rules.Literal(string)"/> instead. <c>Literal("ﬁ")</c>
+    /// compiled under FormKC matches both "ﬁ" and "fi" in the input, because
+    /// a Literal matches a sequence of tokens and Compile normalizes its
+    /// text. To match the letters individually, call this method on the set
+    /// before building the rule. The ligature member is replaced by 'f' and
+    /// 'i' as two separate members, so <c>OneOf(set)</c> matches a lone "f"
+    /// or a lone "i", one token at a time. Input containing the ligature
+    /// arrives as two tokens under FormKC, so matching the whole thing that
+    /// way takes two OneOfs in a row.
+    /// </para>
+    /// <para>
+    /// Either way, compile the grammar with the same form, so the input is
+    /// normalized the same way as the rule. Nothing in the parser calls this
+    /// method for you. It's an explicit opt-in.
+    /// </para>
     /// </remarks>
     public TokenSet WithCompatibilityEquivalents(NormalizationForm form)
     {

@@ -83,10 +83,11 @@ internal sealed class OneOfRule : Rule
             reporter.ReportOffender(rule, original,
                 $"<converts under {form} to the multi-grapheme sequence " +
                 $"\"{normalized}\", but a TokenSet member has to be exactly " +
-                $"one grapheme. Call `set.WithCompatibilityEquivalents({form})` " +
-                $"before building the rule to expand this entry into its " +
-                $"individual graphemes as separate set members, or remove " +
-                $"the entry.>");
+                $"one grapheme. To match it as one unit, take it out of the " +
+                $"set and use Literal instead. To match its graphemes " +
+                $"individually, call `set.WithCompatibilityEquivalents({form})` " +
+                $"before building the rule, which expands the entry into one " +
+                $"set member per grapheme. Or remove the entry.>");
         }
     }
 
