@@ -231,8 +231,8 @@ public readonly struct TokenSet : IEquatable<TokenSet>
 {
     // Built-in sets. All are properties (never public fields) so their
     // storage can change without a binary-breaking change for callers.
-    public static TokenSet Letters          { get; }  // what char.IsLetter / Rune.IsLetter consider letters
-    public static TokenSet Digits           { get; }  // the characters Unicode classifies as decimal digits
+    public static TokenSet Letters          { get; }  // Unicode's five Letter categories (Lu, Ll, Lt, Lm, Lo), what char.IsLetter accepts
+    public static TokenSet Digits           { get; }  // Unicode's Decimal_Number (Nd) category, what char.IsDigit accepts
     public static TokenSet InlineWhitespace { get; }  // TAB plus the Unicode space separators (regex \h), no line terminators
     public static TokenSet LineTerminators  { get; }  // LF, VT, FF, CR, NEL, LS, PS, plus the two-rune CRLF
     public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace | LineTerminators

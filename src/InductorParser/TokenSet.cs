@@ -1549,9 +1549,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     private static readonly Lazy<TokenSet> _inlineWhitespace = new Lazy<TokenSet>(BuildInlineWhitespace);
 
     /// <summary>
-    /// The set of Unicode scalar values that are letters: the same characters
-    /// <see cref="char.IsLetter(char)">char.IsLetter</see> and <a href="https://learn.microsoft.com/dotnet/api/system.text.rune.isletter">Rune.IsLetter</a> consider letters (uppercase, lowercase,
-    /// titlecase, modifier, and other letters).
+    /// The letters: every character in Unicode's five Letter general
+    /// categories, Uppercase_Letter (Lu), Lowercase_Letter (Ll),
+    /// Titlecase_Letter (Lt), Modifier_Letter (Lm), and Other_Letter (Lo).
+    /// That's the same characters <see cref="char.IsLetter(char)">char.IsLetter</see>
+    /// and <a href="https://learn.microsoft.com/dotnet/api/system.text.rune.isletter">Rune.IsLetter</a>
+    /// accept. See
+    /// <a href="https://www.unicode.org/reports/tr44/#General_Category_Values">UAX #44, General Category Values</a>.
     /// </summary>
     /// <remarks>
     /// Use this for things that are literally letters: identifier characters in
@@ -1568,8 +1572,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// </remarks>
     public static TokenSet Letters => _letters.Value;
 
-    /// <summary>The decimal-digit set: the characters Unicode classifies as
-    /// decimal digits.</summary>
+    /// <summary>
+    /// The decimal digits: every character in Unicode's Decimal_Number (Nd)
+    /// general category, the same characters <see cref="char.IsDigit(char)"/>
+    /// and <a href="https://learn.microsoft.com/dotnet/api/system.text.rune.isdigit">Rune.IsDigit</a> accept.
+    /// That's 0-9 plus the digit sets of other scripts (Arabic-Indic,
+    /// Devanagari, fullwidth, and so on). Superscripts and Roman numerals
+    /// aren't included, since Unicode files them under other Number
+    /// categories. See
+    /// <a href="https://www.unicode.org/reports/tr44/#General_Category_Values">UAX #44, General Category Values</a>.
+    /// </summary>
     public static TokenSet Digits => _digits.Value;
 
     /// <summary>
