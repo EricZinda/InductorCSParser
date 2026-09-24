@@ -857,12 +857,19 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return $"U+{codepoint:X4}";
     }
 
+    // The built-in sets are properties rather than public fields so their
+    // storage can change later (an eager field today, a Lazy tomorrow)
+    // without a binary-breaking change for callers compiled against the
+    // old shape. Each cheap set keeps an eager private backing field in the
+    // same textual position the public field had, so the static
+    // initialization order is exactly what it was.
+
     /// <summary>
     /// The empty set, containing no tokens. Equivalent to default(<see cref="InductorParser.TokenSet">TokenSet</see>),
     /// exposed as a named constant so callers can write <see cref="InductorParser.TokenSet.Empty">TokenSet.Empty</see> instead
     /// of relying on "default happens to mean empty."
     /// </summary>
-    public static readonly TokenSet Empty = default;
+    public static TokenSet Empty => default;
 
     /// <summary>
     /// The scalar-value universe: every code point in 0..0x10FFFF except the
@@ -887,7 +894,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <c><see cref="TokenSet.Graphemes">Universe | Graphemes("\r\n")</see></c>.
     /// </para>
     /// </remarks>
-    public static readonly TokenSet Universe = Range(0, 0x10FFFF);
+    public static TokenSet Universe => _universe;
+    private static readonly TokenSet _universe = Range(0, 0x10FFFF);
 
     /// <summary>
     /// All surrogate code units U+D800..U+DFFF as a TokenSet. Matchable only by
@@ -911,7 +919,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">SurrogateRange</see> never gets one in any <see cref="InductorParser.TokenSet">TokenSet</see> it builds.
     /// </para>
     /// </remarks>
-    public static readonly TokenSet Surrogates =
+    public static TokenSet Surrogates => _surrogates;
+    private static readonly TokenSet _surrogates =
         new TokenSet(new[] { new Interval(0xD800, 0xDFFF) });
 
     /// <summary><see cref="Single(int)"/> for a <see cref="char"/>.</summary>
@@ -1604,7 +1613,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// multi-rune entry, so <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> / <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see> against this
     /// set all treat the CRLF grapheme as one terminator.
     /// </remarks>
-    public static readonly TokenSet LineTerminators = BuildLineTerminators();
+    public static TokenSet LineTerminators => _lineTerminators;
+    private static readonly TokenSet _lineTerminators = BuildLineTerminators();
 
     // Build LineTerminators from LineTerminatorScalars (the single source) plus
     // the CRLF grapheme, so adding or removing a terminator means editing one
@@ -1658,7 +1668,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// OneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see>) or NoneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see> | ...).
     /// </para>
     /// </remarks>
-    public static readonly TokenSet Replacement = Single(0xFFFD);
+    public static TokenSet Replacement => _replacement;
+    private static readonly TokenSet _replacement = Single(0xFFFD);
 
     /// <summary>
     /// ASCII-restricted versions of the built-in sets, for grammars that want
@@ -1667,16 +1678,19 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     public static class Ascii
     {
         /// <summary>The ASCII letters A-Z and a-z.</summary>
-        public static readonly TokenSet Letters = Range('A', 'Z') | Range('a', 'z');
+        public static TokenSet Letters => _letters;
+        private static readonly TokenSet _letters = Range('A', 'Z') | Range('a', 'z');
 
         /// <summary>The ASCII digits 0-9.</summary>
-        public static readonly TokenSet Digits = Range('0', '9');
+        public static TokenSet Digits => _digits;
+        private static readonly TokenSet _digits = Range('0', '9');
 
         /// <summary>
         /// ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
         /// full-Unicode <see cref="TokenSet.InlineWhitespace"/>.
         /// </summary>
-        public static readonly TokenSet InlineWhitespace = Runes(" \t");
+        public static TokenSet InlineWhitespace => _inlineWhitespace;
+        private static readonly TokenSet _inlineWhitespace = Runes(" \t");
         /// <summary>
         /// ASCII whitespace including every ASCII line terminator: SPACE, TAB,
         /// LF, VT, FF, CR, plus the two-rune CRLF. The full-Unicode
@@ -1693,8 +1707,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         /// <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> instead. CR, LF, and the CRLF grapheme all live in
         /// the set so <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> match each consistently.
         /// </remarks>
-        public static readonly TokenSet AnyWhitespace =
-            InlineWhitespace
+        public static TokenSet AnyWhitespace => _anyWhitespace;
+        private static readonly TokenSet _anyWhitespace =
+            _inlineWhitespace
             | Single('\n')       // LF
             | Single('\v')       // VT
             | Single('\f')       // FF
@@ -1703,7 +1718,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                                  // static init skips the segmentation-based
                                  // validation (see CrlfGraphemeSet)
         /// <summary>The ASCII hex digits 0-9, a-f, and A-F.</summary>
-        public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
+        public static TokenSet HexDigits => _hexDigits;
+        private static readonly TokenSet _hexDigits = _digits | Range('a', 'f') | Range('A', 'F');
     }
 
     // Builds InlineWhitespace: every code point char.IsWhiteSpace accepts,

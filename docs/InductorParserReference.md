@@ -229,27 +229,29 @@ Token("👋🏽")                      // multi-rune grapheme, still one token
 ```csharp
 public readonly struct TokenSet : IEquatable<TokenSet>
 {
-    // Built-in sets
+    // Built-in sets. All are properties (never public fields) so their
+    // storage can change without a binary-breaking change for callers.
     public static TokenSet Letters          { get; }  // what char.IsLetter / Rune.IsLetter consider letters
     public static TokenSet Digits           { get; }  // the characters Unicode classifies as decimal digits
     public static TokenSet InlineWhitespace { get; }  // TAB plus the Unicode space separators (regex \h), no line terminators
-    public static readonly TokenSet LineTerminators;  // LF, VT, FF, CR, NEL, LS, PS, plus the two-rune CRLF
+    public static TokenSet LineTerminators  { get; }  // LF, VT, FF, CR, NEL, LS, PS, plus the two-rune CRLF
     public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace | LineTerminators
     public static TokenSet XidStart         { get; }  // may begin an identifier per UAX #31 (XID_Start)
     public static TokenSet XidContinue      { get; }  // may continue an identifier per UAX #31 (XID_Continue)
-    public static readonly TokenSet Universe;         // every scalar 0..0x10FFFF except surrogates
-    public static readonly TokenSet Replacement;      // U+FFFD REPLACEMENT CHARACTER
+    public static TokenSet Universe         { get; }  // every scalar 0..0x10FFFF except surrogates
+    public static TokenSet Surrogates       { get; }  // U+D800..U+DFFF, the only way surrogates enter a set
+    public static TokenSet Replacement      { get; }  // U+FFFD REPLACEMENT CHARACTER
+    public static TokenSet Empty            { get; }  // no members, the same as default(TokenSet)
 
     // ASCII-restricted versions of the built-in sets, for grammars that
     // want only the 0x00..0x7F range
     public static class Ascii
     {
-        public static readonly TokenSet Letters          = Range('A', 'Z') | Range('a', 'z');
-        public static readonly TokenSet Digits           = Range('0', '9');
-        public static readonly TokenSet HexDigits        = Digits | Range('a', 'f') | Range('A', 'F');
-        public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        public static readonly TokenSet AnyWhitespace    = InlineWhitespace
-            | Single('\n') | Single('\v') | Single('\f') | Single('\r') | Graphemes("\r\n");
+        public static TokenSet Letters          { get; }  // Range('A', 'Z') | Range('a', 'z')
+        public static TokenSet Digits           { get; }  // Range('0', '9')
+        public static TokenSet HexDigits        { get; }  // Digits | Range('a', 'f') | Range('A', 'F')
+        public static TokenSet InlineWhitespace { get; }  // Runes(" \t")
+        public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace plus LF, VT, FF, CR, and the two-rune CRLF
     }
 
     // Factories. Single and Range also have Rune and int overloads.
