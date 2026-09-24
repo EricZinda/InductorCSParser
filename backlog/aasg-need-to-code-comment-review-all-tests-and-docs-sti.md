@@ -14,3 +14,5 @@ docs/UnicodeInternalsArchitecure.md
 docs/CodeArchitecture.md
 docs/ErrorArchitecture.md
 docs/MappingPositionsAfterNormalization.md
+docs/TestArchitecture.md
+docs/Terminology.md

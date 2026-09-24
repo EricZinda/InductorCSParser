@@ -86,6 +86,16 @@ runtime without changing the project files, override the test-framework list:
 ./test.sh -p:InductorParserTestFrameworks=net9.0
 ```
 
+This only reaches runtimes newer than the everyday pair. The test SDK refuses
+to build a test project for anything older than net8.0, so a runtime below
+.NET 8 can't be exercised this way.
+
+.NET 9 was spot-checked this way on 2026-09-23. The everyday suite and the
+DeepCampaign sweeps both passed on the 9.0.20 runtime, and
+`GlobalizationOracleFixture` admits it, but it stays out of the everyday
+matrix because it's a short-term-support release. `./test.sh` doesn't run it
+unless you pass the override.
+
 The Unity script uses 6000.3.13f1 by default. `UNITY_VERSION` selects another
 Unity Hub installation, while `UNITY_EDITOR` accepts an explicit editor path:
 
@@ -237,7 +247,7 @@ The differential tests in `Lexing/` compare the built-in implementation with
 from the runtime while `string.Normalize` uses the host's globalization
 library, those results could otherwise vary by machine.
 
-`GlobalizationOracleFixture` therefore requires .NET 8 or .NET 10, the ICU
+`GlobalizationOracleFixture` therefore requires .NET 8, 9, or 10, the ICU
 72.1 package shipped with the test project, and normal ICU mode rather than
 Windows NLS or invariant globalization. It stops the test assembly if any
 requirement isn't met. Each passing differential run therefore identifies the

@@ -17,7 +17,8 @@ namespace InductorParser.Tests;
 // supported test runtime. StringInfo's Unicode data is compiled into
 // the runtime itself, not ICU, so the exhaustive sweep is what verifies
 // each runtime version before GlobalizationOracleFixture admits it.
-// The fixture currently accepts .NET 8 and .NET 10 and refuses others.
+// The fixture currently accepts .NET 8 and .NET 10, the everyday pair,
+// plus .NET 9, which was spot-checked once. It refuses others.
 // These tests run on CoreCLR only (Lexing/ doesn't sync to Unity),
 // which is exactly where the oracle is valid.
 //
