@@ -220,6 +220,10 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.WithError(...) isn't supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
+    /// <summary>
+    /// Forwards the parse to the bound target and returns its result
+    /// unchanged.
+    /// </summary>
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // _target is guaranteed non-null here: Compile's ValidateCompiled
@@ -233,6 +237,14 @@ public sealed class LateBoundRule : Rule
         return ParseChild(_target!, lexer, outputSymbols);
     }
 
+    /// <summary>
+    /// Throws if this placeholder was never bound, then works out the
+    /// target's <see cref="FlattenType"/> for the compiled grammar.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// <see cref="Bind"/> was never called, or the chain of bound rules
+    /// never reaches a concrete rule.
+    /// </exception>
     protected override void ValidateCompiled()
     {
         if (_target == null)
