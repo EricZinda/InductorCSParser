@@ -1,7 +1,7 @@
 namespace InductorParser.SyntaxTree;
 
 /// <summary>
-/// Declares what Symbols a rule's successful match contribute to the surrounding parse tree.
+/// Declares what Symbols a rule's successful match contributes to the resulting parse tree.
 /// </summary>
 /// <remarks>
 /// Set during grammar construction with <see cref="Rule.Flatten(FlattenType)"/> or its
