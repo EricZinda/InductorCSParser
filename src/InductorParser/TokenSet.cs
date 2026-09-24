@@ -1636,13 +1636,18 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// The line terminators defined by <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6): the seven single-rune
     /// terminators LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL
     /// (U+0085), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR (U+2029), plus the
-    /// two-rune CRLF (which <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> keeps glued together as one
-    /// grapheme).
+    /// two-rune CRLF. <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> keeps CR and LF glued together as one
+    /// grapheme, so the lexer hands a CRLF line break back as a single
+    /// two-rune token, and a set holding only CR and LF would miss it.
     /// </summary>
     /// <remarks>
     /// Matches what Java's \R and most modern regex engines treat as a
     /// newline (ECMAScript's "line terminator" is the narrower LF / CR /
-    /// LS / PS subset). CRLF lives in the set as a
+    /// LS / PS subset). VT (U+000B) and FF (U+000C) look like ordinary
+    /// whitespace, but UTS #18 counts them as line terminators. That's why
+    /// they're here, why <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> consumes them, and why
+    /// <see cref="InlineWhitespace"/> and <see cref="Ascii.InlineWhitespace">Ascii.InlineWhitespace</see>
+    /// leave them out. CRLF lives in the set as a
     /// multi-rune entry, so <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> / <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see> against this
     /// set all treat the CRLF grapheme as one terminator.
     /// </remarks>
@@ -1720,7 +1725,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         private static readonly TokenSet _digits = Range('0', '9');
 
         /// <summary>
-        /// ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
+        /// ASCII intra-line whitespace: SPACE and TAB only. VT and FF look
+        /// like whitespace but are line terminators per UTS #18, so they live
+        /// in <see cref="TokenSet.LineTerminators"/> instead. Mirrors the
         /// full-Unicode <see cref="TokenSet.InlineWhitespace"/>.
         /// </summary>
         public static TokenSet InlineWhitespace => _inlineWhitespace;
@@ -1728,20 +1735,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         /// <summary>
         /// <see cref="InlineWhitespace">Ascii.InlineWhitespace</see> plus the ASCII
         /// members of <see cref="TokenSet.LineTerminators"/>: SPACE, TAB, LF, VT,
-        /// FF, CR, and the two-rune CRLF. The full-Unicode
-        /// <see cref="TokenSet.AnyWhitespace">TokenSet.AnyWhitespace</see> restricted
-        /// to ASCII.
+        /// FF, CR, and the two-rune CRLF, which the lexer hands back as a
+        /// single token, so a set holding only CR and LF would miss it. The
+        /// full-Unicode <see cref="TokenSet.AnyWhitespace">TokenSet.AnyWhitespace</see>
+        /// restricted to ASCII.
         /// </summary>
         /// <remarks>
-        /// VT (U+000B) and FF (U+000C) look like ordinary whitespace, but
-        /// <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> counts them as line terminators. That's why they're in
-        /// <see cref="TokenSet.LineTerminators"/>, why <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
-        /// consumes them, and why <see cref="InlineWhitespace"/> (SPACE and TAB)
-        /// leaves them out. Use this set for grammars that treat newlines as
-        /// ordinary whitespace. To keep line terminators separate from
-        /// intra-line whitespace, use <see cref="InlineWhitespace"/> and
-        /// <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> instead. CR, LF, and the CRLF grapheme all live in
-        /// the set so <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> match each consistently.
+        /// Use this set for grammars that treat newlines as ordinary
+        /// whitespace. To keep line terminators separate from intra-line
+        /// whitespace, use <see cref="InlineWhitespace"/> and
+        /// <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> instead.
         /// </remarks>
         public static TokenSet AnyWhitespace => _anyWhitespace;
         private static readonly TokenSet _anyWhitespace =
