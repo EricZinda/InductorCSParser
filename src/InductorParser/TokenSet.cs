@@ -10,7 +10,8 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 /// <summary>
-/// A set of tokens, used to describe character classes for <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> and NoneOf.
+/// A set of tokens, used to describe character classes for
+/// <see cref="Rules.OneOf(TokenSet)">OneOf</see> and <see cref="Rules.NoneOf(TokenSet)">NoneOf</see>.
 /// A token is either a single Unicode scalar value (rune) or a multi-rune
 /// grapheme cluster (skin-toned emoji, a joined family emoji, regional-indicator pair,
 /// base+combining-mark grapheme).
@@ -27,7 +28,6 @@ namespace InductorParser;
 /// </code>
 /// The operators return a new TokenSet. The struct is immutable.
 /// <code>
-///     var unicodeIdentifier = TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_");
 ///     var asciiConsonants   = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
 ///     var cyrillicLetters   = TokenSet.Letters &amp; TokenSet.Range(0x0400, 0x04FF);
 ///     var emojiOrLetters    = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
@@ -896,6 +896,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// pre-rejects lone surrogates from input, so this set has nothing to match.
     /// </summary>
     /// <remarks>
+    /// Surrogates require an explicit choice to prevent bugs where a broad
+    /// character range accidentally includes surrogate code units.
+    /// <see cref="Range(int, int)"/> excludes the surrogate block even when
+    /// the range spans it. Use this set or <see cref="SurrogateRange"/>
+    /// when you intend to match surrogates.
+    /// <para>
     /// The two named entry points for putting surrogates into a <see cref="InductorParser.TokenSet">TokenSet</see> are
     /// this constant (the whole block) and <see cref="SurrogateRange"/> (a
     /// sub-block). Range, Single, and Runes reject surrogate endpoints /
@@ -903,6 +909,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// surrogates come from. From there union, intersection, and difference
     /// move them between sets. A grammar that doesn't name Surrogates or
     /// <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">SurrogateRange</see> never gets one in any <see cref="InductorParser.TokenSet">TokenSet</see> it builds.
+    /// </para>
     /// </remarks>
     public static readonly TokenSet Surrogates =
         new TokenSet(new[] { new Interval(0xD800, 0xDFFF) });
@@ -1639,12 +1646,17 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// The single-member set holding U+FFFD REPLACEMENT CHARACTER.
     /// </summary>
     /// <remarks>
+    /// Unicode defines U+FFFD as the substitution character for data that
+    /// can't be converted to Unicode. See
+    /// <a href="https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-5/">Unicode Standard, Section 5.22: U+FFFD Substitution in Conversion</a>.
+    /// <para>
     /// .NET's Unicode decoders (<see cref="System.Text.Encoding.UTF8">Encoding.UTF8</see>, <see cref="System.Text.Encoding.Unicode">Encoding.Unicode</see>,
     /// <see cref="System.Text.Encoding.UTF32">Encoding.UTF32</see>) substitute U+FFFD for ill-formed byte sequences under the
-    /// default DecoderReplacementFallback, so a U+FFFD in your input is the
-    /// fingerprint of an upstream decoder that swallowed something malformed.
+    /// default <see cref="System.Text.DecoderReplacementFallback"/>, so a U+FFFD in your input can
+    /// indicate that an upstream decoder replaced malformed data.
     /// Grammars that want to surface or reject those markers can use
     /// OneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see>) or NoneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see> | ...).
+    /// </para>
     /// </remarks>
     public static readonly TokenSet Replacement = Single(0xFFFD);
 
