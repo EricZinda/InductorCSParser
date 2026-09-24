@@ -42,16 +42,15 @@ namespace InductorParser.Tests;
 //
 //   - Segmentation. StringInfo doesn't use ICU. Its Unicode data is
 //     compiled into the .NET runtime itself, so the runtime version
-//     says which data it has. The built-in segmenter matches .NET
-//     10's StringInfo (same Unicode 16.0 data, and neither side
-//     implements GB9c), and this fixture refuses any other .NET
-//     version until its StringInfo has been checked against the
-//     built-in implementation.
+//     says which data it has. The exhaustive differential tests have
+//     been verified on the supported .NET 8 and .NET 10 test hosts.
+//     This fixture refuses other runtime majors until they have been
+//     checked too.
 //
 // The checks read internal runtime state through reflection, the same
 // way dotnet/runtime's own PlatformDetection test utility does. That
-// is safe here because the .NET 10 check above means the internals
-// have a known shape. A plain behavior check (does A plus a combining
+// is safe here because the .NET 8 and .NET 10 checks above mean the
+// internals have known shapes. A plain behavior check (does A plus a combining
 // accent compose into one character?) backs it up in case reflection
 // ever silently reports nothing.
 //
@@ -65,14 +64,14 @@ public class GlobalizationOracleFixture
     [OneTimeSetUp]
     public void VerifyGlobalizationOracle()
     {
-        if (Environment.Version.Major != 10)
+        if (Environment.Version.Major is not (8 or 10))
         {
             Assert.Fail(
                 $"This process is running .NET {Environment.Version}, and the Unicode tests "
-                + "need .NET 10. StringInfo's Unicode data is compiled into the runtime itself, "
-                + "so a different runtime can segment text differently. Run the suite on .NET "
-                + "10, or run the GraphemeSegmentationTests sweeps on the new runtime and widen "
-                + "this check if they pass.");
+                + "support .NET 8 and .NET 10. StringInfo's Unicode data is compiled into the "
+                + "runtime itself, so another runtime can segment text differently. Run the "
+                + "suite on .NET 8 or .NET 10, or validate the GraphemeSegmentationTests "
+                + "sweeps on the new runtime before widening this check.");
         }
 
         if (ReadGlobalizationModeFlag("Invariant"))

@@ -4,6 +4,9 @@
 # Usage:
 #   ./test.sh                                              # everyday suite
 #   ./test.sh --all                                        # everything (slow, needs network + Unity)
+#   ./test.sh --framework net8.0                           # one supported .NET runtime
+#   ./test.sh --framework net10.0                          # the other supported .NET runtime
+#   ./test.sh -p:InductorParserTestFrameworks=net9.0       # exploratory runtime
 #   ./test.sh --filter "FullyQualifiedName~Atom_fragment"  # one fixture
 #
 # All arguments pass through to dotnet test.

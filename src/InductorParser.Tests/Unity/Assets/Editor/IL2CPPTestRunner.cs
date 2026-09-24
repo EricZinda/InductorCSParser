@@ -39,6 +39,13 @@ namespace InductorParser.Editor
         // batch-mode working directory, which isn't guaranteed.
         private static string ResolveResultsPath()
         {
+            var arguments = Environment.GetCommandLineArgs();
+            for (var index = 0; index < arguments.Length - 1; index++)
+            {
+                if (arguments[index] == "-inductorResultsPath")
+                    return Path.GetFullPath(arguments[index + 1]);
+            }
+
             var projectRoot = Directory.GetParent(Application.dataPath)!.FullName;
             var testsDir = Directory.GetParent(projectRoot)!.FullName;
             var srcDir = Directory.GetParent(testsDir)!.FullName;

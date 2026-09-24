@@ -56,7 +56,7 @@ public class UnicodeEnvironmentSettingTests
 
         // Under dotnet test this always runs on CoreCLR against the
         // net8.0 library build (the highest target the library offers,
-        // consumed by the net10.0 test csproj), where Automatic means
+        // consumed by the CoreCLR test projects), where Automatic means
         // the runtime's StringInfo and string.Normalize. The only
         // other way test sources run (the Unity PlayMode sync) copies
         // Core/, Rules/, and E2EExamples/ plus the root files, never

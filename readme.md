@@ -1,4 +1,4 @@
-The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/.
+The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/. It supports and has been tested on .NET 8, .NET 10 and Unity 6000.3.13f1 Standalone IL2CPP. What this means and how to test on other platforms is described in the [Test Architecture Doc](docs/TestArchitecture.md).
 
 I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. My goal is to design a parser library that is:
 
@@ -17,6 +17,8 @@ If you just want to learn how to use it, follow the primers:
 - [Primer: Unicode in the Inductor Parser](docs/Primer3.md)
 - [Primer: Security-Related Concerns](docs/Primer4.md)
 - [Tutorial: Peek](docs/tutorial-peek.md)
+
+You can also just point Claude or Codex at it.  I've used both rather interchangeably as tools when writing this parser and they both do a good job at understanding it, fixing bugs, describing how it works and how to use it, and using it directly in other projects.
 
 For more background, read on.
 

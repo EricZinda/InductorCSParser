@@ -153,8 +153,8 @@ public class HostGlobalizationChildProcessTests
     // The child's dll in the child's own build output, located by
     // reusing this assembly's own path segments so configuration and
     // target framework can never disagree:
-    // .../src/InductorParser.Tests/bin/<Config>/net10.0/ maps to
-    // .../src/InductorParser.Tests.GlobalizationChild/bin/<Config>/net10.0/.
+    // .../src/InductorParser.Tests/bin/<Config>/<TFM>/ maps to
+    // .../src/InductorParser.Tests.GlobalizationChild/bin/<Config>/<TFM>/.
     private static string ChildAssemblyPath()
     {
         var targetFrameworkDirectory =
@@ -180,7 +180,7 @@ public class HostGlobalizationChildProcessTests
     // on the same installation whatever shell started the suite.
     // DOTNET_HOST_PATH is set by the dotnet host for child processes
     // it spawns (dotnet test sets it). The runtime-directory walk is
-    // the fallback: .../dotnet/shared/Microsoft.NETCore.App/8.0.x/ up
+    // the fallback: .../dotnet/shared/Microsoft.NETCore.App/<version>/ up
     // three levels is the dotnet root. Plain "dotnet" on PATH is the
     // last resort.
     private static string DotnetMuxerPath()
