@@ -74,10 +74,10 @@ public static class Rules
     /// For multi-grapheme matches use <see cref="Literal"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="c"/> can't stand alone as a character. A single
-    /// <c>char</c> can't hold a character above U+FFFF (like an emoji),
-    /// which is written as two <c>char</c>s together, and this is one
-    /// half of such a pair. To match a character above U+FFFF, use
+    /// The value passed to <paramref name="c"/> is a UTF-16 surrogate
+    /// (U+D800 through U+DFFF). These values represent one half of the
+    /// two-<c>char</c> pair needed to encode a code point above U+FFFF,
+    /// so this overload rejects them. To match such a code point, use
     /// <see cref="Token(Rune)"/> or <see cref="Token(int)"/>.
     /// </exception>
     public static Rule Token(char c)
@@ -380,9 +380,10 @@ public static class Rules
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Use when the "end of string" boundary is more than a set of
-    /// runes (for example, the closing delimiter is a multi-char
-    /// sequence like <c>]]&gt;</c>).
+    /// Use when the stop condition needs to match a sequence of tokens,
+    /// such as the closing delimiter <c>]]&gt;</c>, or another rule-based
+    /// pattern. A <see cref="TokenSet"/> stop condition matches one token
+    /// at a time, so it can't match a delimiter that spans several tokens.
     /// <code>
     /// // XML CDATA body: scan until the closing "]]&gt;"
     /// var cdataBody = ScanUntil(Literal("]]&gt;"));
