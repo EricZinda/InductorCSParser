@@ -16,11 +16,6 @@ namespace InductorParser;
 /// time, not a parse option. Call rule.Compile() with a Normalization form (or
 /// null to disable normalization) before parsing if you want a form other 
 /// than the FormC default. See <see cref="Rule.Compile(System.Text.NormalizationForm?)"/>.
-/// <para>
-/// Failure positions reported in <see cref="ParseResult"/> are always in the
-/// caller's original-input coordinates, even when the grammar was compiled
-/// against a normalization form that rewrote the input before matching.
-/// </para>
 /// </remarks>
 public sealed class ParseOptions
 {
@@ -111,7 +106,8 @@ public sealed class ParseOptions
     public TimeSpan Timeout { get; set; } = TimeSpan.Zero;
 
     /// <summary>
-    /// External cancellation signal. Null means no cancellation source. See
+    /// The external cancellation signal this parse watches. Null means no
+    /// cancellation source. See
     /// <see cref="ParseCancellation"/> for what it does, why it's a custom type
     /// instead of <see cref="System.Threading.CancellationToken">System.Threading.CancellationToken</see>, and how to bridge from an
     /// existing <see cref="System.Threading.CancellationToken">CancellationToken</see>.
@@ -226,7 +222,10 @@ public sealed class ParseOptions
     /// (or {charColumn}) instead for a Language Server Protocol client or editor,
     /// which count columns in chars. The <see cref="InductorParser.ParseResult">ParseResult</see> fields stay zero-based. Only
     /// the *Number placeholders are shifted.
-    /// plus a per-template placeholder for the unit-specific value:
+    /// </para>
+    /// <para>
+    /// Each template also has one placeholder of its own for the
+    /// template-specific value:
     /// <code>
     ///   WithErrorTemplate            {message}    (the rule's .WithError text)
     ///   PositionalErrorTemplate      {character}  (the unexpected input character)
@@ -271,17 +270,22 @@ public sealed class ParseOptions
         "Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' can't be normalized.";
     /// <summary>
     /// Template for the message when the input can't be normalized to the
-    /// grammar's normalization form: an unpaired UTF-16 surrogate (which is
-    /// ill-formed UTF-16), or U+FFFE (a noncharacter .NET's string.Normalize
-    /// rejects, and the parser rejects the same way on every runtime). The
-    /// parse returns
-    /// <see cref="ParseOutcome.MalformedInput"/> with this message instead
-    /// of letting .NET's string.Normalize throw an ArgumentException whose text
-    /// the app can't control. See <see cref="PositionalErrorTemplate"/> for the
-    /// placeholder syntax. The per-template {character} placeholder renders the
-    /// offending element (a lone surrogate comes out as U+D800-style text).
-    /// Setting it to null throws.
+    /// grammar's normalization form. Setting it to null throws.
     /// </summary>
+    /// <remarks>
+    /// Two kinds of input trigger it: an unpaired UTF-16 surrogate (which is
+    /// ill-formed UTF-16), and U+FFFE (a noncharacter .NET's string.Normalize
+    /// rejects, and the parser rejects the same way on every runtime). The
+    /// parse returns <see cref="ParseOutcome.MalformedInput"/> with this
+    /// message instead of letting string.Normalize throw an ArgumentException
+    /// whose text the app can't control.
+    /// <para>
+    /// See <see cref="PositionalErrorTemplate"/> for the placeholder syntax. The
+    /// per-template placeholder here is {character}, the offending element. A
+    /// lone surrogate renders as U+D800-style text, since there's no character
+    /// to show.
+    /// </para>
+    /// </remarks>
     public string MalformedInputTemplate
     {
         get => _malformedInputTemplate;

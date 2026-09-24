@@ -97,6 +97,13 @@ public readonly struct ParseResult
     /// fails at end of input reports input.Length, one past the last char, and
     /// that's the most common failure position there is. Check for it before
     /// indexing into the input string with this value.
+    /// <para>
+    /// This is always an index into the string you passed to Parse, even when
+    /// the grammar was compiled against a normalization form that rewrote the
+    /// input before matching. The parser translates positions back to your
+    /// original input before reporting them, and every other position on this
+    /// result is derived from this one, so they're all in those coordinates.
+    /// </para>
     /// </remarks>
     public int ErrorCharIndex { get; }
 
