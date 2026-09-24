@@ -505,12 +505,22 @@ public static class Rules
     /// </code>
     /// The fluent equivalent is <see cref="Rule.AliasedAs(string)"/>.
     /// <para>
-    /// Once named, the alias replaces the inner's identity, so aliasing
-    /// an already-named (Preserve) inner shows the match under the
-    /// alias's name instead of the inner's, not nested under it. Until
-    /// .As(...) names it, the alias is transparent: it delegates to the
-    /// inner and the parse tree comes out exactly as if the alias weren't
-    /// written, so a named inner is still findable through it.
+    /// Until <c>.As(...)</c> names it, the alias changes nothing. The
+    /// match is found under the inner's original name:
+    /// <code>
+    /// var digits = OneOrMore(OneOf(TokenSet.Digits)).As("digits");
+    /// var result = Alias(digits).Parse("1234");
+    /// result.Find(digits);   // the "1234" match
+    /// </code>
+    /// Once named, the alias's Symbol takes the inner's place in the tree
+    /// (it doesn't sit above it), so the match is found under the new
+    /// name instead:
+    /// <code>
+    /// var year = Alias(digits).As("year");
+    /// var result = year.Parse("1234");
+    /// result.Find(year);     // the same "1234" match
+    /// result.Find(digits);   // null
+    /// </code>
     /// </para>
     /// <para>
     /// Errors: the inner's own <c>.WithError</c> fires from inside it as
@@ -716,9 +726,9 @@ public static class Rules
     /// <summary>
     /// Match one or more whitespace tokens, where each token is either
     /// an intra-line whitespace rune (per <c>TokenSet.InlineWhitespace</c>)
-    /// or a line terminator (per <see cref="EndOfLine"/>, which handles
-    /// CRLF as one two-rune unit). Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// or a line terminator, using <see cref="EndOfLine"/>, which handles
+    /// all end-of-line characters including CRLF, a two-rune unit. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
     /// The "skip any whitespace including newlines" rule, for free-form
