@@ -39,7 +39,15 @@
       href: docs/TestArchitecture.md
     - name: Terminology
       href: docs/Terminology.md
+# The API entry references the api/ folder's own toc.yml (the categorized
+# sidebar build-docs.sh writes) rather than a page. Referencing the folder is
+# what makes DocFX show that sidebar next to the landing page. A page linked
+# straight from this top navigation gets the navigation itself as its table
+# of contents and no sidebar at all, which is why the old api/index.md landing
+# page had none.
+# topicUid picks the landing page: the Rules class, where a grammar starts.
 - name: API
-  href: api/index.md
+  href: api/
+  topicUid: InductorParser.Rules
 - name: GitHub
   href: https://github.com/EricZinda/InductorCSParser

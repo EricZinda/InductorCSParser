@@ -105,21 +105,22 @@ rm -rf docs/docfx/api docs/docfx/_site
 echo "=== Generating API metadata ==="
 "$dotnet_command" docfx metadata docs/docfx/docfx.json
 
-echo "=== Building the categorized API index ==="
+echo "=== Building the categorized API sidebar ==="
 # The metadata step writes docs/docfx/api/toc.yml grouped by namespace, with every
 # type entry indented two spaces ("  - uid:") and namespace entries at column 0.
-# From that we build one combined API page (no per-namespace pages):
-#   - api/index.md: every public type grouped into task-based sections
-#   - api/toc.yml:  a flat sidebar of those same types (no namespace grouping)
+# We replace it with a sidebar that groups every public type into task-based
+# sections instead. There's no separate API index page: the top navigation's
+# API entry (docs/docfx/toc.yml) lands on the Rules class with this sidebar
+# next to it, and the sidebar is the categorized overview.
 api_dir="docs/docfx/api"
 all_type_uids=$(grep -E '^  - uid: ' "$api_dir/toc.yml" | sed -E 's/^  - uid: //')
 
-# Editorial grouping for the API index. Lines starting with "# " are section
+# Editorial grouping for the API sidebar. Lines starting with "# " are section
 # headings; every other non-blank line is a type uid placed under the current
 # heading, in this order. This is the one hand-maintained list in the docs, so
 # the completeness check below appends (and warns about) any public type that's
-# missing rather than letting a newly added type silently drop off the index.
-api_index_layout='# Building a Grammar
+# missing rather than letting a newly added type silently drop off the sidebar.
+api_sidebar_layout='# Building a Grammar
 InductorParser.Rules
 InductorParser.TokenSet
 InductorParser.TokenSet.Ascii
@@ -145,47 +146,35 @@ InductorParser.Lexing.Token
 InductorParser.Lexing.Lexer.Probe
 InductorParser.Lexing.Lexer.Transaction
 InductorParser.INormalizationReporter
-InductorParser.Lexing.GraphemeHelpers
-InductorParser.Lexing.RuneHelpers
 InductorParser.Invariant
 InductorParser.InductorParserBugException
+# Unicode
+InductorParser.Lexing.UnicodeEnvironment
+InductorParser.Lexing.UnicodeImplementation
+InductorParser.Lexing.GraphemeHelpers
+InductorParser.Lexing.NormalizationHelpers
+InductorParser.Lexing.RuneHelpers
 # Infrastructure
 InductorParser.SyntaxTree.SymbolRanges
 InductorParser.InvariantInterpolatedStringHandler
 InductorParser.Tracing.TraceInterpolatedStringHandler'
 
-# Render the grouped index page.
-{
-    printf '# API Reference\n'
-    while IFS= read -r line; do
-        case "$line" in
-            '# '*) printf '\n## %s\n\n' "${line#\# }" ;;
-            '')    ;;
-            *)     printf -- '- <xref:%s>\n' "$line" ;;
-        esac
-    done <<< "$api_index_layout"
-} > "$api_dir/index.md"
-
 # Completeness check: warn (don't silently drop) if a public type is missing
 # from the layout, or if the layout names a type that no longer exists.
-layout_uids=$(printf '%s\n' "$api_index_layout" | grep -Ev '^(#|$)')
+layout_uids=$(printf '%s\n' "$api_sidebar_layout" | grep -Ev '^(#|$)')
 missing=$(comm -23 <(printf '%s\n' "$all_type_uids" | sort -u) <(printf '%s\n' "$layout_uids" | sort -u))
 stale=$(comm -13 <(printf '%s\n' "$all_type_uids" | sort -u) <(printf '%s\n' "$layout_uids" | sort -u))
 if [ -n "$missing" ]; then
-    echo "WARNING: public types missing from the API index layout (appended under Uncategorized):" >&2
+    echo "WARNING: public types missing from the API sidebar layout (appended under Uncategorized):" >&2
     printf '  %s\n' $missing >&2
-    {
-        printf '\n## Uncategorized\n\n'
-        for uid in $missing; do printf -- '- <xref:%s>\n' "$uid"; done
-    } >> "$api_dir/index.md"
 fi
 if [ -n "$stale" ]; then
-    echo "WARNING: API index layout names types that no longer exist:" >&2
+    echo "WARNING: API sidebar layout names types that no longer exist:" >&2
     printf '  %s\n' $stale >&2
 fi
 
-# Sidebar grouped into the same task-based sections as the index page. Each
-# "# Heading" becomes a collapsible group; each uid becomes a type link under it.
+# Sidebar grouped into the task-based sections above. Each "# Heading" becomes
+# a collapsible group. Each uid becomes a type link under it.
 {
     printf '### YamlMime:TableOfContent\n'
     printf 'items:\n'
@@ -195,7 +184,7 @@ fi
             '')    ;;
             *)     printf -- '  - uid: %s\n' "$line" ;;
         esac
-    done <<< "$api_index_layout"
+    done <<< "$api_sidebar_layout"
     # Keep the sidebar complete: any type missing from the layout (already
     # warned about above) goes under its own group rather than vanishing.
     if [ -n "$missing" ]; then
