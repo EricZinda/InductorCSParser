@@ -306,16 +306,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     /// <summary>
-    /// Form-project this set: every entry E becomes Normalize(E, form), so the
+    /// Normalize every entry of this set to <paramref name="form"/>, so the
     /// set's entries are in the same form the lexer produces on match-time
-    /// input. Under FormC the lexer emits FormC-normalized text, so the set
-    /// must contain entries in that form. Used by OneOfRule / NoneOfRule's
-    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>-time pipeline.
+    /// input. For example, under FormC the lexer emits FormC-normalized text,
+    /// so the set must contain entries in that form. Used by OneOfRule /
+    /// NoneOfRule's <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>-time pipeline.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Ensures that every entry is exactly one grapheme. If an
-    /// entry's projection is multi-grapheme (a compatibility conversion like the
+    /// entry's normalized form is multi-grapheme (a compatibility conversion like the
     /// single grapheme fi-ligature to the two characters "fi" under FormKC), the entry is excluded from the result
     /// and recorded in <paramref name="multiGraphemeConversions"/> for the
     /// caller to surface as an offender. OneOfRule / NoneOfRule match one
@@ -330,12 +330,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// unnormalized-<see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> semantics some grammars rely on.
     /// </para>
     /// <para>
-    /// Entries whose Normalize call throws ArgumentException (the runtime's way
-    /// of saying "I won't normalize this") are dropped silently. The exact set
-    /// of rejected code points varies by runtime (Windows and Linux disagree),
-    /// so they aren't cataloged here. Input the lexer produces goes
-    /// through the same Normalize call and would hit the same rejection, so a
-    /// dropped entry can't match anything the rule would otherwise have seen.
+    /// An entry the active normalizer refuses is dropped. Surrogate runes
+    /// never reach this point (they pass through, above), so in practice that
+    /// means U+FFFE, the one well-formed scalar .NET's string.Normalize
+    /// rejects. The built-in normalizer refuses it too, on purpose (see
+    /// UnicodeNormalization.FindFirstUnnormalizableIndex), so this is the same
+    /// on every runtime. The drop is harmless: a normalizing Parse reports
+    /// input containing U+FFFE as MalformedInput before any rule runs, so a
+    /// OneOf could never have matched that entry anyway. Even a runtime whose
+    /// normalizer accepts U+FFFE ends up in the same place, since that
+    /// Parse-time scan rejects the input regardless.
     /// </para>
     /// </remarks>
     public TokenSet NormalizedFor(NormalizationForm form, List<(string original, string normalized)>? multiGraphemeConversions = null)

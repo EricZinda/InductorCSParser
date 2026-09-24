@@ -1170,6 +1170,27 @@ public class TokenSetTests
     }
 
     [Test]
+    public void NormalizedFor_drops_an_entry_the_normalizer_refuses()
+    {
+        // U+FFFE is the one well-formed scalar the normalizers refuse, on
+        // both implementations (Noncharacter_FFFE_throws_from_both in
+        // UnicodeNormalizationTests). NormalizedFor drops such an entry
+        // instead of failing the whole set. That's harmless because a
+        // normalizing Parse reports input containing U+FFFE as
+        // MalformedInput before any rule runs, so the entry could never
+        // have matched. This locks in the drop, and that the rest of the
+        // set survives it.
+        var set = TokenSet.Single('a') | TokenSet.Single(0xFFFE);
+
+        var normalized = set.NormalizedFor(NormalizationForm.FormC);
+
+        Assert.That(normalized.ContainsRune('a'), Is.True,
+            "an ordinary entry must survive the normalization");
+        Assert.That(normalized.ContainsRune(0xFFFE), Is.False,
+            "the entry the normalizer refuses must be dropped");
+    }
+
+    [Test]
     public void AnyWhitespace_contains_inline_whitespace_and_line_terminators()
     {
         // The full-Unicode "regex \s" set: every rune that's intra-line
