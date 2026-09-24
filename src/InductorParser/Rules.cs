@@ -438,25 +438,11 @@ public static class Rules
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Fails only at EOF. It's the "match any one character" catch-all for
-    /// the two shapes where a grammar has to consume input it isn't
-    /// otherwise describing:
-    /// <list type="bullet">
-    /// <item><description>
-    /// Error recovery. After a parse hits input it can't handle, a common
-    /// fix is to skip ahead to a known resync point (the next newline, a
-    /// closing brace) and resume from there. The loop that eats the tokens
-    /// in between matches them with <c>AnyToken()</c>:
-    /// <c>ZeroOrMore(And(Not(resyncPoint), AnyToken()))</c> keeps consuming
-    /// one token at a time until the resync point shows up.
-    /// </description></item>
-    /// <item><description>
-    /// Pass-through text. Grammars that pull out a few structured pieces (a
+    /// Fails only at EOF. Use it as a catch-all for pass-through text:
+    /// grammars that pull out a few structured pieces (a
     /// <c>{{ name }}</c> interpolation in a template, say) and copy
     /// everything else through as-is use <c>AnyToken()</c> for the "any
     /// other character" branch.
-    /// </description></item>
-    /// </list>
     /// </remarks>
     public static Rule AnyToken() => new AnyTokenRule();
 
@@ -762,19 +748,6 @@ public static class Rules
     /// spec (UTS #18 §1.6, RL1.6). CRLF is tried first so a CR immediately
     /// followed by an LF is consumed as one terminator rather than split
     /// into two.
-    /// <para>
-    /// Why CRLF is a Literal and not just a set member: in the lexer's
-    /// normal grapheme mode CRLF arrives as one token, and
-    /// <see cref="TokenSet.LineTerminators"/> includes CRLF as a multi-rune
-    /// entry, so the OneOf alternative would match it as a unit on its
-    /// own. But in the one-rune-per-token mode that
-    /// <see cref="WithinToken"/> switches its sub-lexer into, CR and LF
-    /// arrive as two separate tokens. A OneOf reads exactly one
-    /// token, so alone it would match the CR and leave the LF to count as
-    /// a second terminator. A Literal matches its text across token
-    /// boundaries, so the Literal("\r\n") alternative consumes the pair
-    /// as one terminator in both token modes.
-    /// </para>
     /// </remarks>
     /// <param name="eofIsEol">
     /// When <c>true</c>, end-of-input counts as an end-of-line. The
@@ -785,6 +758,18 @@ public static class Rules
     /// </param>
     public static Rule EndOfLine(bool eofIsEol = false)
     {
+        // The Literal("\r\n") arm looks redundant: LineTerminators already
+        // holds CRLF as a multi-rune member, so in the normal grapheme mode
+        // the OneOf arm matches the CRLF token on its own. The Literal is
+        // there for UnicodeImplementation.Runtime on a legacy runtime
+        // (Unity's Mono, .NET Framework), whose StringInfo predates the
+        // UAX #29 rule that glues CR to LF and so hands the lexer CR and LF
+        // as two separate tokens. OneOf reads exactly one token and would
+        // match the CR alone, leaving the LF to count as a second
+        // terminator. Literal matches its text across token boundaries, so
+        // it takes the pair as one terminator on every runtime. It goes
+        // first so it wins over the OneOf arm. The regression test is
+        // EndOfLineRuleTests.Literal_crlf_spans_a_two_token_crlf_where_OneOf_stops_at_the_cr.
         var alternatives = eofIsEol
             ? new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators), Eof() }
             : new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators) };
