@@ -284,7 +284,7 @@ public sealed class Symbol
     /// Parse, read <see cref="SourceText"/>, or set <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> to keep every
     /// grammar node (including <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> ones) in the tree.
     /// <para>
-    /// When the grammar normalized the input (any form other than <c>Compile(null)</c>), a leaf's
+    /// When the grammar normalized the input (any form other than <c><see cref="Rule.Compile(System.Text.NormalizationForm?)">Compile(null)</see></c>), a leaf's
     /// text comes from the normalized parse input, so this renders the normalized form the parser
     /// matched, not the user's original spelling. <see cref="SourceText"/> returns the original.
     /// </para>

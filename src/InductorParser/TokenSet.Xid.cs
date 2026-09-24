@@ -256,7 +256,7 @@ public readonly partial struct TokenSet
 
     /// <summary>
     /// The set of Unicode scalar values that may begin an identifier per
-    /// UAX #31 R1 (XID_Start). Use together with <see cref="XidContinue"/> and
+    /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> R1 (XID_Start). Use together with <see cref="XidContinue"/> and
     /// <see cref="Rules.Identifier"/> for spec-compliant identifier matching.
     /// </summary>
     /// <remarks>
@@ -268,7 +268,7 @@ public readonly partial struct TokenSet
 
     /// <summary>
     /// The set of Unicode scalar values that may continue an identifier per
-    /// UAX #31 R1 (XID_Continue). Intended for the tail of an identifier match.
+    /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> R1 (XID_Continue). Intended for the tail of an identifier match.
     /// </summary>
     /// <remarks>
     /// Includes everything in <see cref="XidStart"/> plus combining marks,

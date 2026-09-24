@@ -89,11 +89,11 @@ internal enum GraphemeClusterBreakType
 }
 
 /// <summary>
-/// Computes UAX #29 extended grapheme cluster boundaries
+/// Computes <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> extended grapheme cluster boundaries
 /// (<a href="https://www.unicode.org/reports/tr29/">Unicode Text Segmentation</a>). The built-in state machine
 /// implements the rule set of Rev. 41
 /// (<a href="https://www.unicode.org/reports/tr29/tr29-41.html">UAX #29, Revision 41</a>), the last
-/// edition before GB9c, over Unicode 16.0 break-property data,
+/// edition before GB9c, over <a href="https://www.unicode.org/versions/Unicode16.0.0/">Unicode 16.0</a> break-property data,
 /// deliberately matching .NET 10's StringInfo, which also lacks GB9c
 /// (dotnet/runtime#111546),
 /// and its generated break-property table in

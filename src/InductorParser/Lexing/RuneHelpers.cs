@@ -12,7 +12,7 @@ namespace InductorParser.Lexing;
 /// </summary>
 /// <remarks>
 /// This is the rune layer. Its grapheme-cluster counterpart is
-/// <see cref="GraphemeHelpers"/>. The two stay separate because runes and UAX #29
+/// <see cref="GraphemeHelpers"/>. The two stay separate because runes and <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
 /// clusters are different units, and the lexer's rune-mode / grapheme-mode
 /// split rests on keeping them apart.
 /// </remarks>
@@ -88,7 +88,7 @@ public static class RuneHelpers
     /// lexer's one-rune-per-token Read: a well-formed high+low surrogate
     /// pair is one rune, and any stray surrogate is one rune. Allocates
     /// nothing, so it's fine on a warm path. To count a prefix, pass a
-    /// span over just that range (e.g. <c>input.AsSpan(0, position)</c>).
+    /// span over just that range (e.g. <c><see cref="System.MemoryExtensions.AsSpan(string, int, int)">input.AsSpan(0, position)</see></c>).
     /// A high surrogate at the end of the span has no paired low inside
     /// it, so it counts as one rune, matching how the lexer reads a
     /// cluster's runes.

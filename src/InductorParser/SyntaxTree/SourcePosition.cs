@@ -8,7 +8,7 @@ namespace InductorParser.SyntaxTree;
 /// <remarks>
 /// Line and <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">CharColumn</see> are zero-based. <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">CharColumn</see> counts UTF-16 code units, the same unit as
 /// <see cref="CharIndex"/>, matching the Language Server Protocol convention editor diagnostics
-/// use. <see cref="TokenColumn"/> is the grapheme-based counterpart, for human-facing output. Line breaks follow UTS #18 §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> accepts: LF, CRLF (one
+/// use. <see cref="TokenColumn"/> is the grapheme-based counterpart, for human-facing output. Line breaks follow <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> accepts: LF, CRLF (one
 /// break, not two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029). Keeping the two sets
 /// aligned matters for grammars that use <see cref="InductorParser.Rules.EndOfLine">EndOfLine()</see> on Unicode input: every terminator the grammar
 /// consumes also bumps the reported line. That set is a superset of the LF, CRLF, and lone CR a
@@ -30,7 +30,7 @@ public readonly struct SourcePosition
 
     /// <summary>
     /// The index of the token (i.e. a grapheme: a character as the user sees it) that <see cref="CharIndex"/> falls in,
-    /// using the same UAX #29 extended-grapheme-cluster segmentation the lexer uses.
+    /// using the same <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> extended-grapheme-cluster segmentation the lexer uses.
     /// </summary>
     /// <remarks>
     /// A family emoji or an accented letter typed as base + accent is one token even though it's
@@ -94,7 +94,7 @@ public readonly struct SourcePosition
     /// to (not including) the next line terminator, taken from <see cref="Input"/>.
     /// </summary>
     /// <remarks>
-    /// The line boundaries are the UTS #18 terminators the parser counts for
+    /// The line boundaries are the <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> terminators the parser counts for
     /// <see cref="Line"/> (see <see cref="TokenSet.IsLineTerminator(char)"/>), so
     /// this stays consistent with <see cref="Line"/> / <see cref="CharColumn"/> and
     /// handles CRLF and the rarer terminators that splitting the input on '\n'

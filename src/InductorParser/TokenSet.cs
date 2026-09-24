@@ -496,7 +496,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// Returns a copy of this set with every entry that isn't already in
-    /// <paramref name="form"/> projected through <c>Normalize(form)</c>. An
+    /// <paramref name="form"/> projected through <c><see cref="string.Normalize(System.Text.NormalizationForm)">Normalize(form)</see></c>. An
     /// entry whose conversion is a single
     /// rune is replaced by that rune. An entry whose conversion is a single
     /// grapheme spanning several runes (e.g. "e + combining acute" under
@@ -668,7 +668,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// True when this set has no members: its rune ranges and its multi-rune
     /// graphemes are both empty. A lone surrogate member, if any, lives in the
     /// rune ranges as a single-value interval, so this covers it too.
-    /// Equivalent to <c>this == TokenSet.Empty</c>.
+    /// Equivalent to <c><see cref="TokenSet.Empty">this == TokenSet.Empty</see></c>.
     /// </summary>
     public bool IsEmpty =>
         (_ranges == null || _ranges.Length == 0)
@@ -870,8 +870,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// grapheme clusters (see remarks).
     /// </summary>
     /// <remarks>
-    /// Handy as the base for "everything except X" sets: <c>Universe - someSet</c>
-    /// is the composable <see cref="InductorParser.TokenSet">TokenSet</see> form of <c>NoneOf(X)</c>, and you can keep
+    /// Handy as the base for "everything except X" sets: <c><see cref="TokenSet.Universe">Universe - someSet</see></c>
+    /// is the composable <see cref="InductorParser.TokenSet">TokenSet</see> form of <c><see cref="Rules.NoneOf(TokenSet)">NoneOf(X)</see></c>, and you can keep
     /// combining it with <c>|</c>, <c>&amp;</c>, and <c>-</c>. Leaving the
     /// surrogate block out keeps that subtraction safe: a grammar that asks for
     /// "everything except space" won't quietly start admitting lone surrogates.
@@ -879,12 +879,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// It holds single scalar values only, never a multi-rune grapheme cluster.
     /// You can enumerate every code point in a bounded range, but not the
     /// open-ended set of all clusters since it is effectively infinite, so a "universe" only makes sense at the
-    /// scalar level. The consequence: <c>OneOf(Universe)</c> matches a
+    /// scalar level. The consequence: <c><see cref="Rules.OneOf(TokenSet)">OneOf(Universe)</see></c> matches a
     /// single-scalar token but never a multi-rune grapheme like CRLF or a
-    /// skin-toned emoji, and <c>Universe - X</c> leaves those tokens out too
+    /// skin-toned emoji, and <c><see cref="TokenSet.Universe">Universe - X</see></c> leaves those tokens out too
     /// (they were never in it). To match any token at all, use <see cref="Rules.AnyToken"/>.
-    /// To include specific clusters, add them with <c>Graphemes(...)</c>, like
-    /// <c>Universe | Graphemes("\r\n")</c>.
+    /// To include specific clusters, add them with <c><see cref="TokenSet.Graphemes">Graphemes(...)</see></c>, like
+    /// <c><see cref="TokenSet.Graphemes">Universe | Graphemes("\r\n")</see></c>.
     /// </para>
     /// </remarks>
     public static readonly TokenSet Universe = Range(0, 0x10FFFF);
@@ -995,8 +995,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// Like <see cref="Range(int, int)"/>, a tuple that straddles the surrogate
     /// block is split so the result contains no surrogate code units. Both
     /// endpoints must be valid scalars, but the interval between them can still
-    /// cover 0xD800..0xDFFF, so <c>FromRanges((0, 0x10FFFF))</c> is every scalar
-    /// value with no surrogates, the same set as <c>Range(0, 0x10FFFF)</c>. To
+    /// cover 0xD800..0xDFFF, so <c><see cref="TokenSet.FromRanges">FromRanges((0, 0x10FFFF))</see></c> is every scalar
+    /// value with no surrogates, the same set as <c><see cref="TokenSet.Range(int, int)">Range(0, 0x10FFFF)</see></c>. To
     /// put surrogates into a set, name them with <see cref="Surrogates"/> or
     /// <see cref="SurrogateRange"/> and union them in.
     /// </remarks>
@@ -1035,7 +1035,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// passing <c>"\r\n"</c> or the decomposed <c>"e + U+0301"</c> almost
     /// certainly wanted either the grapheme (use
     /// <see cref="Graphemes(string[])"/>) or the scalars built
-    /// explicitly (<c>Single(c1) | Single(c2)</c>), not whatever a
+    /// explicitly (<c><see cref="TokenSet.Single(char)">Single(c1) | Single(c2)</see></c>), not whatever a
     /// silent rune-walk would have produced. Use this when you want
     /// "the set of these N characters" from a string of ASCII or
     /// otherwise non-combining scalars.
@@ -1086,7 +1086,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// Build a set whose members are one or more grapheme clusters.
-    /// Each array element must be exactly one grapheme (one full UAX #29
+    /// Each array element must be exactly one grapheme (one full <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
     /// text element). Passing a string with multiple graphemes throws.
     /// Use this when the set members are graphemes: CRLF, a decomposed
     /// <c>a + U+0301</c>, a joined family emoji, skin-toned faces,
@@ -1558,7 +1558,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// Whitespace within a line: Unicode's White_Space property (what
-    /// char.IsWhiteSpace tests) minus the UTS #18 line terminators. That
+    /// char.IsWhiteSpace tests) minus the <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> line terminators. That
     /// leaves TAB plus every Space_Separator (Zs) character: SPACE, NO-BREAK
     /// SPACE, OGHAM SPACE MARK, EN QUAD through HAIR SPACE, NARROW NO-BREAK
     /// SPACE, MEDIUM MATHEMATICAL SPACE, and IDEOGRAPHIC SPACE. It's the class
@@ -1584,10 +1584,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     };
 
     /// <summary>
-    /// The line terminators defined by UTS #18 §1.6 (RL1.6): the seven single-rune
+    /// The line terminators defined by <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6): the seven single-rune
     /// terminators LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL
     /// (U+0085), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR (U+2029), plus the
-    /// two-rune CRLF (which UAX #29 keeps glued together as one
+    /// two-rune CRLF (which <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> keeps glued together as one
     /// grapheme).
     /// </summary>
     /// <remarks>
@@ -1626,7 +1626,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         new TokenSet(Array.Empty<Interval>(), new[] { "\r\n" });
 
     /// <summary>
-    /// Full-Unicode intra-line whitespace plus every UTS #18 line terminator
+    /// Full-Unicode intra-line whitespace plus every <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> line terminator
     /// (the seven single-rune terminators and the two-rune CRLF). Use
     /// this for grammars that treat any whitespace as an ordinary separator. For
     /// ASCII-only whitespace use <see cref="Ascii.AnyWhitespace"/>.
@@ -1672,7 +1672,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         /// </summary>
         /// <remarks>
         /// VT (U+000B) and FF (U+000C) look like ordinary whitespace, but
-        /// UTS #18 counts them as line terminators. That's why they're in
+        /// <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> counts them as line terminators. That's why they're in
         /// <see cref="TokenSet.LineTerminators"/>, why <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
         /// consumes them, and why <see cref="InlineWhitespace"/> (SPACE and TAB)
         /// leaves them out. Use this set for grammars that treat newlines as
@@ -1741,7 +1741,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// True when <paramref name="c"/> is one of the single-rune line terminators
-    /// UTS #18 §1.6 (RL1.6) defines: LF (U+000A), VT (U+000B), FF (U+000C),
+    /// <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6) defines: LF (U+000A), VT (U+000B), FF (U+000C),
     /// CR (U+000D), NEL (U+0085), LINE SEPARATOR (U+2028), or PARAGRAPH SEPARATOR
     /// (U+2029).
     /// </summary>
@@ -1757,7 +1757,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// True when <paramref name="codepoint"/> is one of the single-rune line
-    /// terminators UTS #18 §1.6 (RL1.6) defines. See <see cref="IsLineTerminator(char)"/>.
+    /// terminators <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6) defines. See <see cref="IsLineTerminator(char)"/>.
     /// </summary>
     public static bool IsLineTerminator(int codepoint)
     {

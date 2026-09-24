@@ -170,7 +170,7 @@ public sealed class ParseOptions
     private string _withErrorTemplate =
         "{message} at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
-    /// Template that wraps a rule's <c>.WithError("...")</c> message when that
+    /// Template that wraps a rule's <c><see cref="Rule.WithError">.WithError("...")</see></c> message when that
     /// rule is the deepest failure. The author's text fills the {message}
     /// placeholder, and the position placeholders every template shares add the
     /// location, so a custom message includes its position the way the mechanical

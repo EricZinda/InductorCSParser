@@ -7,7 +7,7 @@ namespace InductorParser.Lexing;
 /// Shared grapheme-cluster helpers built on <c>GraphemeSegmentation</c>,
 /// so callers get the same answers the lexer does.
 /// This is the grapheme-cluster layer. Its rune-layer counterpart is
-/// <see cref="RuneHelpers"/>, kept separate because runes and UAX #29
+/// <see cref="RuneHelpers"/>, kept separate because runes and <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
 /// clusters are different units. Public so user-defined rules can ask
 /// the same segmentation questions the built-in rules do. Which
 /// segmenter is used is the process-wide
@@ -48,7 +48,7 @@ public static class GraphemeHelpers
     /// at or below <paramref name="position"/>. A position that lands
     /// mid-cluster is pulled back to the start of that cluster, and a
     /// position already on a boundary comes back unchanged. Positions
-    /// past the end of the string are treated as <c>text.Length</c>.
+    /// past the end of the string are treated as <c><see cref="string.Length">text.Length</see></c>.
     /// </summary>
     /// <remarks>
     /// Cluster boundaries come from the per-string boundary cache, so

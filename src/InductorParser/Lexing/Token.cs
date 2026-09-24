@@ -34,7 +34,7 @@ namespace InductorParser.Lexing;
 /// <summary>
 /// One chunk of input the lexer just consumed, or the EOF token at the end
 /// of the input. In the default grapheme mode a token is one Unicode
-/// grapheme (i.e. one UAX #29 grapheme cluster, possibly several runes
+/// grapheme (i.e. one <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> grapheme cluster, possibly several runes
 /// wide). In the one-rune-per-token sub-lexer mode (<see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see>) it's one
 /// rune, which can be a fragment of a cluster, and under Compile(null) it
 /// can be a lone surrogate. Rather than copying the matched text into a new

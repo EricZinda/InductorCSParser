@@ -105,7 +105,7 @@ public readonly struct ParseResult
     /// <see cref="ErrorCharIndex"/> and the original input.
     /// </summary>
     /// <remarks>
-    /// Line breaks follow UTS #18 §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
+    /// Line breaks follow <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
     /// accepts: LF, CRLF (one break, not two), lone CR, VT, FF, NEL (U+0085),
     /// LS (U+2028), PS (U+2029). That's a superset of the LF, CRLF, and lone CR
     /// a Language Server Protocol client recognizes, so the number matches an
@@ -156,7 +156,7 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Error position in tokens (Unicode graphemes), using the
-    /// same UAX #29 grapheme segmentation the lexer uses. Computed lazily
+    /// same <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> grapheme segmentation the lexer uses. Computed lazily
     /// from <see cref="ErrorCharIndex"/>.
     /// </summary>
     public int ErrorTokenIndex =>

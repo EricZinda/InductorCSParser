@@ -9,7 +9,7 @@ namespace InductorParser;
 /// </summary>
 /// <remarks>
 /// This is a custom type instead of <see cref="System.Threading.CancellationToken">System.Threading.CancellationToken</see>
-/// because <see cref="System.Threading.CancellationToken">CancellationToken</see>'s <c>.CancelAfter(timespan)</c> shortcut
+/// because <see cref="System.Threading.CancellationTokenSource">CancellationTokenSource</see>'s <c><see cref="System.Threading.CancellationTokenSource.CancelAfter(System.TimeSpan)">.CancelAfter(timespan)</see></c> shortcut
 /// schedules the cancel through <see cref="System.Threading.Timer">System.Threading.Timer</see>, which silently does
 /// nothing on WebGL where there's no background thread to fire the timer
 /// callback. For a wall-clock deadline, use <see cref="ParseOptions.Timeout"/>

@@ -36,7 +36,7 @@ public enum ParseOutcome
     /// message rendered from <see cref="ParseOptions.MalformedInputTemplate"/>,
     /// so a non-English app can localize it the same way it localizes every
     /// other failure. Only reachable when the grammar was compiled with a
-    /// normalization form (the default). <c>Compile(null)</c> skips
+    /// normalization form (the default). <c><see cref="Rule.Compile(System.Text.NormalizationForm?)">Compile(null)</see></c> skips
     /// normalization and surfaces ill-formed code units as ordinary tokens
     /// instead, which a grammar can decide how to handle
     /// <see cref="GrammarMismatch"/>.

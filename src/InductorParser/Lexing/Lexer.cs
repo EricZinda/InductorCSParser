@@ -42,7 +42,7 @@ namespace InductorParser.Lexing;
 /// (LiteralRule, <see cref="InductorParser.TokenSet">TokenSet</see> membership, etc.) already handle that. One gotcha if
 /// you hand-write a Rule that inspects token lengths: a stray isn't always one
 /// char. In rune mode it is, but in grapheme mode a stray plus a
-/// following combining mark is one two-char token, per the UAX #29
+/// following combining mark is one two-char token, per the <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
 /// grapheme rules
 /// (<a href="https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules">Grapheme Cluster Boundary Rules</a>).
 /// Read consumes the whole token either way.

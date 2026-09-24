@@ -22,7 +22,7 @@ public readonly struct SourceRange
 
     /// <summary>
     /// Builds a range from two existing endpoints. The typical use is synthesizing the span of
-    /// a compound AST node from its children's spans: <c>new SourceRange(left.Start, right.End)</c>
+    /// a compound AST node from its children's spans: <c><see cref="SourceRange.SourceRange(SourcePosition, SourcePosition)">new SourceRange(left.Start, right.End)</see></c>
     /// covers everything from the start of the left child to the end of the right one.
     /// </summary>
     /// <remarks>
@@ -56,7 +56,7 @@ public readonly struct SourceRange
     /// The substring of <see cref="SourcePosition.Input"/> covered by this range.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex)</c>, but lets
+    /// Equivalent to <c><see cref="string.Substring(int, int)">Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex)</see></c>, but lets
     /// the caller skip remembering which string the range came from.
     /// </remarks>
     public string SubstringOfInput() =>

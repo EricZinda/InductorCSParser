@@ -11,7 +11,7 @@ namespace InductorParser;
 /// instantiating rule classes directly.
 /// </summary>
 /// <remarks>
-/// The idiomatic usage is <c>using static InductorParser.Rules;</c>
+/// The idiomatic usage is <c><see cref="Rules">using static InductorParser.Rules;</see></c>
 /// at the top of a grammar file, which drops the class prefix and
 /// lets a grammar read close to the shape you'd write on a
 /// whiteboard:
@@ -62,7 +62,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
-    /// cluster), so <c>Token('a')</c> matches when the token is the
+    /// cluster), so <c><see cref="Rules.Token(char)">Token('a')</see></c> matches when the token is the
     /// single char 'a' but fails when 'a' is combined with a
     /// following accent (because the token is then rendered as one
     /// 'a' with an accent over it, which doesn't match a bare 'a').
@@ -204,7 +204,7 @@ public static class Rules
     /// A <see cref="InductorParser.TokenSet">TokenSet</see> can hold sets of anything the user sees as one
     /// character, including composed sequences like skin-toned
     /// emoji, regional-indicator flags, and family emoji. So a set
-    /// built with <c>TokenSet.Letters | TokenSet.Graphemes("🇺🇸")</c>
+    /// built with <c><see cref="TokenSet.Graphemes">TokenSet.Letters | TokenSet.Graphemes("🇺🇸")</see></c>
     /// matches either a letter or the US flag, each as one token.
     /// <code>
     /// // Identifier character: any letter, digit, or underscore
@@ -232,7 +232,7 @@ public static class Rules
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>OneOf(TokenSet.Runes(runes))</c>.
+    /// Equivalent to <c><see cref="Rules.OneOf(TokenSet)">OneOf(TokenSet.Runes(runes))</see></c>.
     /// When you need ranges, category unions, complements, or grapheme
     /// clusters, use <see cref="TokenSet"/> directly and pass it to the
     /// <see cref="OneOf(TokenSet)"/> overload.
@@ -263,7 +263,7 @@ public static class Rules
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>NoneOf(TokenSet.Runes(runes))</c>.
+    /// Equivalent to <c><see cref="Rules.NoneOf(TokenSet)">NoneOf(TokenSet.Runes(runes))</see></c>.
     /// When you need ranges, category unions, complements, or grapheme
     /// clusters, use <see cref="TokenSet"/> directly and pass it to the
     /// <see cref="NoneOf(TokenSet)"/> overload.
@@ -308,7 +308,7 @@ public static class Rules
     /// Fails if end-of-input is reached without ever matching the
     /// stopper, unless <paramref name="eofIsTerminator"/> is true.
     /// It scans the characters directly in one pass, which is a meaningful
-    /// speedup over <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
+    /// speedup over <c><see cref="Rules.ZeroOrMore">ZeroOrMore(NoneOf(stopAt))</see></c> for long strings.
     /// <para>
     /// Pass <paramref name="eofIsTerminator"/> = <c>true</c> for
     /// grammars where the body legitimately ends at the stopper or at
@@ -420,7 +420,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// For grammars whose final element is "the rest of the input."
-    /// Implemented as <c>ScanUntil(TokenSet.Empty, eofIsTerminator: true)</c>:
+    /// Implemented as <c><see cref="Rules.ScanUntil(TokenSet, bool)">ScanUntil(TokenSet.Empty, eofIsTerminator: true)</see></c>:
     /// no stopper ever matches, so the scan runs to EOF, which
     /// <c>eofIsTerminator</c> allows, and returns one leaf over the whole
     /// remaining span.
@@ -576,7 +576,7 @@ public static class Rules
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(1, int.MaxValue, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">BetweenInclusive(1, int.MaxValue, inner)</see></c>.
     /// </remarks>
     public static Rule OneOrMore(Rule inner) =>
         new BetweenInclusiveRule(inner, 1, int.MaxValue, "OneOrMore");
@@ -589,7 +589,7 @@ public static class Rules
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(0, int.MaxValue, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">BetweenInclusive(0, int.MaxValue, inner)</see></c>.
     /// </remarks>
     public static Rule ZeroOrMore(Rule inner) =>
         new BetweenInclusiveRule(inner, 0, int.MaxValue, "ZeroOrMore");
@@ -602,7 +602,7 @@ public static class Rules
     /// <remarks>
     /// Greedy: it takes the match when the inner matches and never gives
     /// it back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(0, 1, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">BetweenInclusive(0, 1, inner)</see></c>.
     /// </remarks>
     public static Rule Optional(Rule inner) =>
         new BetweenInclusiveRule(inner, 0, 1, "Optional");
@@ -616,7 +616,7 @@ public static class Rules
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(atLeast, int.MaxValue, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">BetweenInclusive(atLeast, int.MaxValue, inner)</see></c>.
     /// </remarks>
     public static Rule AtLeast(int atLeast, Rule inner) =>
         new BetweenInclusiveRule(inner, atLeast, int.MaxValue, $"AtLeast[{atLeast}]");
@@ -631,7 +631,7 @@ public static class Rules
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(0, atMost, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">BetweenInclusive(0, atMost, inner)</see></c>.
     /// </remarks>
     public static Rule AtMost(int atMost, Rule inner) =>
         new BetweenInclusiveRule(inner, 0, atMost, $"AtMost[{atMost}]");
@@ -645,7 +645,7 @@ public static class Rules
     /// <remarks>
     /// Greedy like the rest, which for a fixed count just means it never
     /// gives a match back: once it has matched count times, it stays
-    /// matched. Equivalent to <c>BetweenInclusive(count, count, inner)</c>.
+    /// matched. Equivalent to <c><see cref="Rules.BetweenInclusive">BetweenInclusive(count, count, inner)</see></c>.
     /// </remarks>
     public static Rule Exactly(int count, Rule inner) =>
         new BetweenInclusiveRule(inner, count, count, $"Exactly[{count}]");
@@ -694,17 +694,15 @@ public static class Rules
     /// <summary>
     /// Match one or more whitespace tokens within a line: TAB and the
     /// Unicode space separators, per <see cref="TokenSet.InlineWhitespace"/>.
-    /// Doesn't match line terminators
-    /// (<c>\n</c>, <c>\r</c>, <c>\r\n</c>, NEL, LINE SEPARATOR,
-    /// PARAGRAPH SEPARATOR, VT, FF). Default <see cref="FlattenType"/>:
+    /// Doesn't match the line terminators recognized by <see cref="EndOfLine"/>.
+    /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
     /// For the "skip any whitespace here, including none" shape
     /// (between tokens that don't require a separator), wrap it as
-    /// <c>Optional(InlineWhitespace())</c>.
-    /// For line terminators see <see cref="EndOfLine"/>. For
-    /// "either intra-line whitespace or a line terminator" use
+    /// <c><see cref="Rules.Optional">Optional(InlineWhitespace())</see></c>.
+    /// For "either intra-line whitespace or a line terminator" use
     /// <see cref="AnyWhitespace"/>.
     /// </remarks>
     public static Rule InlineWhitespace() =>
@@ -723,7 +721,7 @@ public static class Rules
     /// breaks as ordinary whitespace.
     /// <para>
     /// For "skip whitespace here, possibly none," wrap as
-    /// <c>Optional(AnyWhitespace())</c>. For strict intra-line whitespace
+    /// <c><see cref="Rules.Optional">Optional(AnyWhitespace())</see></c>. For strict intra-line whitespace
     /// (no line terminators) use <see cref="InlineWhitespace"/>.
     /// </para>
     /// </remarks>
@@ -746,7 +744,7 @@ public static class Rules
     /// <item><description>End-of-input, but only when <paramref name="eofIsEol"/> is <c>true</c></description></item>
     /// </list>
     /// Those line terminators are the ones defined by the Unicode regex
-    /// spec (UTS #18 §1.6, RL1.6). CRLF is tried first so a CR immediately
+    /// spec (<a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6, RL1.6). CRLF is tried first so a CR immediately
     /// followed by an LF is consumed as one terminator rather than split
     /// into two.
     /// </remarks>
@@ -824,7 +822,7 @@ public static class Rules
     /// Match a programming-language identifier: a name that starts with a
     /// letter (or other identifier-start character) and continues with
     /// letters, digits, and the like. Follows the Unicode rules for
-    /// identifiers (UAX #31, "Unicode Identifiers and Syntax").
+    /// identifiers (<a href="https://www.unicode.org/reports/tr31/">UAX #31</a>, "Unicode Identifiers and Syntax").
     /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
     /// so the match appears in the tree as one node whose children are
     /// one leaf per matched character (a leaf covers the character's
@@ -834,15 +832,14 @@ public static class Rules
     /// <para>
     /// See <a href="../docs/UnicodeGotchas.md">Unicode Gotchas</a> for recipes that reproduce the
     /// identifier rules of specific languages (Python 3, Rust,
-    /// ECMAScript) via these parameters plus the form chosen at
-    /// <see cref="Rule.Compile(System.Text.NormalizationForm?)"/> time.
+    /// ECMAScript).
     /// </para>
     /// </remarks>
     /// <param name="extraStartRunes">
     /// Extra characters to allow as the first character, on top of the
     /// base Unicode identifier-start set (<see cref="TokenSet.XidStart"/>).
-    /// UAX #31 calls this a "profile". Typical value for a
-    /// programming-language grammar is <c>TokenSet.Runes("_")</c>. Python
+    /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> calls this a "profile". Typical value for a
+    /// programming-language grammar is <c><see cref="TokenSet.Runes(string)">TokenSet.Runes("_")</see></c>. Python
     /// and Rust use this shape. C# also permits leading underscores, though
     /// its full identifier specification differs. Defaults to
     /// <see cref="TokenSet.Empty"/> (no additions, just the base set).
