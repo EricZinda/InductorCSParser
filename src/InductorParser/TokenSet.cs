@@ -1643,10 +1643,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         new TokenSet(Array.Empty<Interval>(), new[] { "\r\n" });
 
     /// <summary>
-    /// Full-Unicode intra-line whitespace plus every <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> line terminator
-    /// (the seven single-rune terminators and the two-rune CRLF). Use
-    /// this for grammars that treat any whitespace as an ordinary separator. For
-    /// ASCII-only whitespace use <see cref="Ascii.AnyWhitespace"/>.
+    /// <see cref="InlineWhitespace"/> | <see cref="LineTerminators"/>: every
+    /// whitespace rune within a line plus every line terminator, including
+    /// the two-rune CRLF. Use this for grammars that treat any whitespace,
+    /// newlines included, as an ordinary separator. For the ASCII-only
+    /// version use <see cref="Ascii.AnyWhitespace">Ascii.AnyWhitespace</see>.
     /// </summary>
     public static TokenSet AnyWhitespace => _anyWhitespace.Value;
     private static readonly Lazy<TokenSet> _anyWhitespace =
@@ -1692,9 +1693,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         public static TokenSet InlineWhitespace => _inlineWhitespace;
         private static readonly TokenSet _inlineWhitespace = Runes(" \t");
         /// <summary>
-        /// ASCII whitespace including every ASCII line terminator: SPACE, TAB,
-        /// LF, VT, FF, CR, plus the two-rune CRLF. The full-Unicode
-        /// <see cref="TokenSet.AnyWhitespace"/> restricted to ASCII.
+        /// <see cref="InlineWhitespace">Ascii.InlineWhitespace</see> plus the ASCII
+        /// members of <see cref="TokenSet.LineTerminators"/>: SPACE, TAB, LF, VT,
+        /// FF, CR, and the two-rune CRLF. The full-Unicode
+        /// <see cref="TokenSet.AnyWhitespace">TokenSet.AnyWhitespace</see> restricted
+        /// to ASCII.
         /// </summary>
         /// <remarks>
         /// VT (U+000B) and FF (U+000C) look like ordinary whitespace, but
