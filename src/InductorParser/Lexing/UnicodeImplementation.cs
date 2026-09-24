@@ -3,9 +3,9 @@ namespace InductorParser.Lexing;
 /// <summary>
 /// Which Unicode implementation the parser uses, covering both UAX #29
 /// grapheme cluster segmentation (token boundaries, Token and
-/// TokenSet.Graphemes validation, error positions, the
+/// <see cref="InductorParser.TokenSet.Graphemes(System.String[])">TokenSet.Graphemes</see> validation, error positions, the
 /// <see cref="GraphemeHelpers"/> methods) and Unicode normalization
-/// (input at Parse, literals and token sets at Compile, position
+/// (input at Parse, literals and token sets at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>, position
 /// mapping, the <see cref="NormalizationHelpers"/> methods).
 /// </summary>
 public enum UnicodeImplementation

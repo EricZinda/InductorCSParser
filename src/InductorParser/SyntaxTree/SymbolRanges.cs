@@ -22,15 +22,15 @@ public static class SymbolRanges
 
     /// <summary>
     /// Start of the range reserved for future built-in symbol ids, just past
-    /// the Unicode range. Unused today: anonymous rules (And, Or, OneOrMore,
-    /// and the rest) get custom-range ids assigned at Compile, so no Symbol
+    /// the Unicode range. Unused today: anonymous rules (And, Or, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">OneOrMore</see>,
+    /// and the rest) get custom-range ids assigned at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>, so no Symbol
     /// currently has an id in this range.
     /// </summary>
     public const int BuiltinRangeStart = 0x110000;
 
     /// <summary>
     /// First id for custom symbols: named rules from .As(), anonymous rules,
-    /// and user Rule subclasses. Assigned at Compile time.
+    /// and user Rule subclasses. Assigned at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> time.
     /// </summary>
     public const int CustomRangeStart = 0x200000;
 }

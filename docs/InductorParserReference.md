@@ -232,7 +232,7 @@ public readonly struct TokenSet : IEquatable<TokenSet>
     // Built-in sets
     public static TokenSet Letters          { get; }  // what char.IsLetter / Rune.IsLetter consider letters
     public static TokenSet Digits           { get; }  // the characters Unicode classifies as decimal digits
-    public static TokenSet InlineWhitespace { get; }  // whitespace except the UTS #18 line terminators
+    public static TokenSet InlineWhitespace { get; }  // TAB plus the Unicode space separators (regex \h), no line terminators
     public static readonly TokenSet LineTerminators;  // LF, VT, FF, CR, NEL, LS, PS, plus the two-rune CRLF
     public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace | LineTerminators
     public static TokenSet XidStart         { get; }  // may begin an identifier per UAX #31 (XID_Start)

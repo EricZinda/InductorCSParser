@@ -7,7 +7,7 @@ namespace InductorParser.Lexing;
 /// Shared grapheme-cluster helpers built on <c>GraphemeSegmentation</c>,
 /// so callers get the same answers the lexer does.
 /// This is the grapheme-cluster layer. Its rune-layer counterpart is
-/// <c>RuneHelpers</c>, kept separate because runes and UAX #29
+/// <see cref="RuneHelpers"/>, kept separate because runes and UAX #29
 /// clusters are different units. Public so user-defined rules can ask
 /// the same segmentation questions the built-in rules do. Which
 /// segmenter is used is the process-wide

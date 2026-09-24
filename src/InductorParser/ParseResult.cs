@@ -5,16 +5,16 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 /// <summary>
-/// The value returned by Rule.Parse: either a successful parse
+/// The value returned by <see cref="InductorParser.Rule.Parse(System.String)">Rule.Parse</see>: either a successful parse
 /// (the result will be in <see cref="Tree"/> / <see cref="Symbols"/>) or a failure
 /// (see <see cref="Outcome"/>, <see cref="ErrorMessage"/>, and the error-position
 /// family).
 /// </summary>
 /// <remarks>
 /// <see cref="Outcome"/> distinguishes "the grammar rejected the input"
-/// (GrammarMismatch) from "the input can't be normalized" (MalformedInput)
-/// from "a budget tripped" (Timeout, RuleCountLimitExceeded,
-/// DepthLimitExceeded, Canceled) so callers can show different messages to the
+/// (<see cref="InductorParser.ParseOutcome.GrammarMismatch">GrammarMismatch</see>) from "the input can't be normalized" (<see cref="InductorParser.ParseOutcome.MalformedInput">MalformedInput</see>)
+/// from "a budget tripped" (Timeout, <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">RuleCountLimitExceeded</see>,
+/// <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">DepthLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.Canceled">Canceled</see>) so callers can show different messages to the
 /// user in each case.
 /// <para>
 /// The error-position family reports the same point (where the parse got
@@ -24,10 +24,10 @@ namespace InductorParser;
 /// either unit, <see cref="ErrorCharColumn"/> (chars, the Language Server Protocol
 /// convention) or <see cref="ErrorTokenColumn"/> (graphemes). All zero-based.
 /// Pick whichever matches the unit the caller will use the number in.
-/// <see cref="ErrorPosition"/> returns all of these packed into one SourcePosition
+/// <see cref="ErrorPosition"/> returns all of these packed into one <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see>
 /// struct, so callers that want more than one unit share the position work
 /// instead of paying a separate walk per property read. The same conversion is
-/// available on Symbol.SourceRange for any node in the parse tree.
+/// available on <see cref="InductorParser.SyntaxTree.Symbol.SourceRange">Symbol.SourceRange</see> for any node in the parse tree.
 /// </para>
 /// </remarks>
 public readonly struct ParseResult
@@ -52,11 +52,11 @@ public readonly struct ParseResult
     /// and on a default-constructed ParseResult.
     /// </summary>
     /// <remarks>
-    /// On GrammarMismatch, either the innermost WithError message set by the
+    /// On <see cref="InductorParser.ParseOutcome.GrammarMismatch">GrammarMismatch</see>, either the innermost <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">WithError</see> message set by the
     /// grammar or a generated "Unexpected 'x' at line L, column C" fallback. On
-    /// MalformedInput, the message from
+    /// <see cref="InductorParser.ParseOutcome.MalformedInput">MalformedInput</see>, the message from
     /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
-    /// matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
+    /// matching "Parse aborted: ..." string. See: <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>
     /// </remarks>
     public string ErrorMessage => _errorMessage ?? string.Empty;
 
@@ -65,8 +65,8 @@ public readonly struct ParseResult
     /// parse, it's empty.
     /// </summary>
     /// <remarks>
-    /// For a root with FlattenType.Preserve this has exactly one element (the
-    /// root's Symbol). For a root with FlattenType.Flatten whose children
+    /// For a root with <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> this has exactly one element (the
+    /// root's Symbol). For a root with <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see> whose children
     /// bubbled up, this is the flat list of those children.
     /// </remarks>
     public IReadOnlyList<Symbol> Symbols =>
@@ -78,7 +78,7 @@ public readonly struct ParseResult
     /// Symbol, null otherwise.
     /// </summary>
     /// <remarks>
-    /// Callers that know their root has FlattenType.Preserve (the common case
+    /// Callers that know their root has <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> (the common case
     /// for named grammars) can keep using this. For grammars whose root
     /// produces multiple top-level Symbols, use <see cref="Symbols"/> directly.
     /// </remarks>
@@ -88,7 +88,7 @@ public readonly struct ParseResult
     /// <summary>
     /// Error position in chars (UTF-16 code units), zero-based. On success this
     /// is 0. On failure it's the position of the deepest recorded failure
-    /// (where the parser got furthest before giving up). See docs/ErrorArchitecture.md.
+    /// (where the parser got furthest before giving up). See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>.
     /// </summary>
     /// <remarks>
     /// This is the unit string.Substring, Range and Span use, and the unit the Language
@@ -105,13 +105,13 @@ public readonly struct ParseResult
     /// <see cref="ErrorCharIndex"/> and the original input.
     /// </summary>
     /// <remarks>
-    /// Line breaks follow UTS #18 §1.6 (RL1.6), the same set Rules.EndOfLine()
+    /// Line breaks follow UTS #18 §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
     /// accepts: LF, CRLF (one break, not two), lone CR, VT, FF, NEL (U+0085),
     /// LS (U+2028), PS (U+2029). That's a superset of the LF, CRLF, and lone CR
     /// a Language Server Protocol client recognizes, so the number matches an
     /// editor on ordinary source and diverges only on the rarer terminators.
-    /// Keeping it aligned with EndOfLine() means every terminator a grammar
-    /// consumes also bumps the reported line. See SourcePosition for the same
+    /// Keeping it aligned with <see cref="InductorParser.Rules.EndOfLine">EndOfLine()</see> means every terminator a grammar
+    /// consumes also bumps the reported line. See <see cref="SourcePosition"/> for the same
     /// alignment note.
     /// </remarks>
     public int ErrorLine
@@ -163,7 +163,7 @@ public readonly struct ParseResult
         SourcePositionConverter.ToTokenIndex(_input ?? string.Empty, ErrorCharIndex);
 
     /// <summary>
-    /// The error position packed into a SourcePosition struct. Returns null on
+    /// The error position packed into a <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see> struct. Returns null on
     /// a successful parse.
     /// </summary>
     /// <remarks>
@@ -182,7 +182,7 @@ public readonly struct ParseResult
     /// when it's true.
     /// </summary>
     /// <remarks>
-    /// ParseOutcome.Success is the enum's zero value, so a default-constructed
+    /// <see cref="InductorParser.ParseOutcome.Success">ParseOutcome.Success</see> is the enum's zero value, so a default-constructed
     /// ParseResult (a zeroed array element, a FirstOrDefault on an empty list)
     /// has Outcome == Success despite never coming from a parse. The
     /// <c>_grammar != null</c> check rejects those: every real result is built
@@ -243,7 +243,7 @@ public readonly struct ParseResult
     /// the grammar that produced this result. Returns null if the id isn't known.
     /// </summary>
     /// <remarks>
-    /// The ParseResult-level mirror of Symbol.DisplayName: same fallback chain
+    /// The <see cref="InductorParser.ParseResult">ParseResult</see>-level mirror of <see cref="InductorParser.SyntaxTree.Symbol.DisplayName">Symbol.DisplayName</see>: same fallback chain
     /// (.As(...) name, else class-derived trace label, else rune text), so it's
     /// a display label, not a dispatch key.
     /// </remarks>
@@ -273,13 +273,13 @@ public readonly struct ParseResult
 
     /// <summary>
     /// The text of the surviving parse-tree nodes, concatenated into one
-    /// string. Delete'd nodes (whitespace, delimiters) drop out, so this is the
+    /// string. <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>'d nodes (whitespace, delimiters) drop out, so this is the
     /// matched content, not the verbatim input. Returns the empty string on
     /// failure and on a default-constructed ParseResult.
     /// </summary>
     /// <remarks>
     /// Walks every top-level Symbol and concatenates its surviving leaf text.
-    /// Mirrors Symbol.ToString(), which does the same for one Symbol. For a
+    /// Mirrors <see cref="InductorParser.SyntaxTree.Symbol.ToString">Symbol.ToString()</see>, which does the same for one Symbol. For a
     /// tree-shaped debug rendering, use <see cref="PrintTree"/> or
     /// <see cref="ToDebugString"/>.
     /// </remarks>
@@ -346,17 +346,17 @@ public readonly struct ParseResult
     }
 
     /// <summary>
-    /// Build a grammar-mismatch result. Outcome is GrammarMismatch, the error
+    /// Build a grammar-mismatch result. Outcome is <see cref="InductorParser.ParseOutcome.GrammarMismatch">GrammarMismatch</see>, the error
     /// fields have the deepest-failure message and position.
     /// </summary>
     public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
 
     /// <summary>
-    /// Build a malformed-input result. Outcome is MalformedInput: the input
+    /// Build a malformed-input result. Outcome is <see cref="InductorParser.ParseOutcome.MalformedInput">MalformedInput</see>: the input
     /// couldn't be normalized to the grammar's form because it isn't well-formed
     /// Unicode. The error fields have the localized message and the offending
-    /// character index. Rule.Parse builds this in place of letting .NET's
+    /// character index. <see cref="InductorParser.Rule.Parse(System.String)">Rule.Parse</see> builds this in place of letting .NET's
     /// string.Normalize throw. It's public so a custom parse driver that does its
     /// own normalization can report the same shape.
     /// </summary>
@@ -365,7 +365,7 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Build a budget-abort result. Outcome is one of Timeout,
-    /// RuleCountLimitExceeded, DepthLimitExceeded, or Canceled. The error fields
+    /// <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">RuleCountLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">DepthLimitExceeded</see>, or <see cref="InductorParser.ParseOutcome.Canceled">Canceled</see>. The error fields
     /// have the matching "Parse aborted: ..." message and the deepest-failure
     /// position so callers still get a "how far did we get" hint.
     /// </summary>

@@ -4,18 +4,18 @@ namespace InductorParser;
 /// External cancellation signal for a running parse. Construct one, hand it to
 /// <see cref="ParseOptions.Cancellation"/>, and call <see cref="Cancel"/> from
 /// wherever the cancel decision is made (a UI button, an upstream request
-/// handler, a test). On the next periodic budget check after Cancel() fires,
+/// handler, a test). On the next periodic budget check after <see cref="InductorParser.ParseCancellation.Cancel">Cancel()</see> fires,
 /// the parse aborts with <see cref="ParseOutcome.Canceled"/>.
 /// </summary>
 /// <remarks>
-/// This is a custom type instead of System.Threading.CancellationToken
-/// because CancellationToken's <c>.CancelAfter(timespan)</c> shortcut
-/// schedules the cancel through System.Threading.Timer, which silently does
+/// This is a custom type instead of <see cref="System.Threading.CancellationToken">System.Threading.CancellationToken</see>
+/// because <see cref="System.Threading.CancellationToken">CancellationToken</see>'s <c>.CancelAfter(timespan)</c> shortcut
+/// schedules the cancel through <see cref="System.Threading.Timer">System.Threading.Timer</see>, which silently does
 /// nothing on WebGL where there's no background thread to fire the timer
 /// callback. For a wall-clock deadline, use <see cref="ParseOptions.Timeout"/>
 /// instead, which polls a Stopwatch synchronously and works on every target.
 /// <para>
-/// Bridging from an existing CancellationToken (for example, an ASP.NET
+/// Bridging from an existing <see cref="System.Threading.CancellationToken">CancellationToken</see> (for example, an ASP.NET
 /// request token) is one line:
 /// <code>
 ///     var cancellation = new ParseCancellation();

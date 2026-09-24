@@ -14,7 +14,7 @@ namespace InductorParser.Lexing;
 /// <para>
 /// Cluster boundaries come from the GraphemeClusterIndex on the input string. One
 /// sub-lexer mode, selected by the public Lexer(string, bool oneRunePerToken)
-/// constructor, walks one rune per token instead. The built-in WithinToken uses
+/// constructor, walks one rune per token instead. The built-in <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see> uses
 /// it, and so can a user-defined Rule that needs to run an inner rule against the
 /// runes inside a single token. The sub-lexer lexes a substring holding just that
 /// token's text, so the inner rule sees each rune of the outer token as its own
@@ -31,20 +31,20 @@ namespace InductorParser.Lexing;
 /// A normalizing Compile (FormC/FormD/FormKC/FormKD) runs string.Normalize over
 /// the whole input before the lexer ever sees it, and string.Normalize rejects
 /// any lone surrogate, bare or fused with a following combining mark. Parse
-/// catches that and returns a MalformedInput ParseResult, so under a normalizing
+/// catches that and returns a <see cref="InductorParser.ParseOutcome.MalformedInput">MalformedInput</see> <see cref="InductorParser.ParseResult">ParseResult</see>, so under a normalizing
 /// grammar malformed input never reaches the lexer at all. A grammar that has to
 /// accept malformed UTF-16 stays on Compile(null).
 ///
 /// If you
-/// want to detect or reject malformed input, Compile with no normalization and 
+/// want to detect or reject malformed input, <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> with no normalization and
 /// do it at the rune level:
 /// TryPeekRune returns false on a stray, and rules that decode runes
-/// (LiteralRule, TokenSet membership, etc.) already handle that. One gotcha if
+/// (LiteralRule, <see cref="InductorParser.TokenSet">TokenSet</see> membership, etc.) already handle that. One gotcha if
 /// you hand-write a Rule that inspects token lengths: a stray isn't always one
 /// char. In rune mode it is, but in grapheme mode a stray plus a
 /// following combining mark is one two-char token, per the UAX #29
 /// grapheme rules
-/// (https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules).
+/// (<a href="https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules">Grapheme Cluster Boundary Rules</a>).
 /// Read consumes the whole token either way.
 /// </para>
 /// </remarks>
@@ -93,7 +93,7 @@ public sealed partial class Lexer
     /// For a top-level lexer this is what the caller passed to Parse. For a
     /// sub-lexer (the one WithinTokenRule builds over the runes of one outer
     /// token) this is the substring covering just those runes. The sub-lexer's
-    /// Position, IsEof, DeepestFailurePosition, and Read / Token offsets are all
+    /// Position, IsEof, <see cref="InductorParser.Lexing.Lexer.DeepestFailurePosition">DeepestFailurePosition</see>, and Read / Token offsets are all
     /// expressed in coordinates of this string. Rule code can bound its own
     /// loops on Input.Length safely either way: the lexer's readable range and
     /// Input.Length are always the same string.
@@ -152,19 +152,19 @@ public sealed partial class Lexer
     /// and periodic tick to <paramref name="parent"/>'s budget, so work done
     /// on this lexer counts on top of the parent's current depth and limits.
     /// A user-defined Rule that runs an inner rule against a sub-lexer (the
-    /// way the built-in WithinToken does) calls this so the inner recursion
-    /// can't spend a fresh MaxDepth on top of the outer parse's depth, and so
+    /// way the built-in <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see> does) calls this so the inner recursion
+    /// can't spend a fresh <see cref="InductorParser.ParseOptions.MaxDepth">MaxDepth</see> on top of the outer parse's depth, and so
     /// a Timeout or Cancellation observed on either lexer trips both.
     /// </summary>
     public void InheritBudgetFrom(Lexer parent) => _budget.InheritFrom(parent._budget);
 
     /// <summary>
     /// Tick the parse budget once. A user-defined Rule subclass whose
-    /// TryParseRule scans many tokens in a single invocation should call
+    /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">TryParseRule</see> scans many tokens in a single invocation should call
     /// this once per iteration of its inner loop, the same way the
-    /// built-in ScanWhile and ScanUntil rules do. Without an inner tick
+    /// built-in <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see> and <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> rules do. Without an inner tick
     /// the budget's periodic check only runs on rule entry, so Timeout,
-    /// Cancellation, and RuleCountLimit can't observe the per-iteration
+    /// Cancellation, and <see cref="InductorParser.ParseOptions.RuleCountLimit">RuleCountLimit</see> can't observe the per-iteration
     /// work.
     /// </summary>
     /// <remarks>
@@ -200,7 +200,7 @@ public sealed partial class Lexer
     /// whether Read walks one rune at a time (<paramref name="oneRunePerToken"/>
     /// true) instead of one grapheme cluster. A user-defined Rule that needs
     /// to run an inner rule against the runes inside a single token (the way
-    /// the built-in WithinToken does) builds a sub-lexer this way over the
+    /// the built-in <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see> does) builds a sub-lexer this way over the
     /// token's text, then calls <see cref="InheritBudgetFrom"/> to fold the
     /// inner work into the outer parse's budget.
     /// </summary>
@@ -279,7 +279,7 @@ public sealed partial class Lexer
     /// <summary>
     /// Move the read cursor to <paramref name="position"/>. Two invariants are
     /// enforced so a user-defined scanning Rule that walks the cursor by hand
-    /// (the way the built-in ScanUntil does, jumping past a token whose length
+    /// (the way the built-in <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> does, jumping past a token whose length
     /// it already peeked) can't put the lexer into a state a later Read would
     /// choke on:
     /// <list type="bullet">
@@ -287,7 +287,7 @@ public sealed partial class Lexer
     /// or this throws <see cref="System.ArgumentOutOfRangeException"/>.</item>
     /// <item>It must sit on a token boundary: a grapheme-cluster boundary in
     /// normal mode, or between runes (never inside a surrogate pair) in the
-    /// WithinToken sub-lexer's rune mode. A mid-token offset throws
+    /// <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see> sub-lexer's rune mode. A mid-token offset throws
     /// <see cref="System.ArgumentException"/> here, rather than surfacing later
     /// as an opaque failure when the next Read tries to size a token at it.</item>
     /// </list>
@@ -298,8 +298,8 @@ public sealed partial class Lexer
     /// This moves only the read cursor. It's safe with respect to the two
     /// pieces of parse state a rule author might worry about:
     /// <list type="bullet">
-    /// <item><b>Error tracking</b> is unaffected. RecordFailure /
-    /// RecordCompositeFailure record at the explicit position the rule passes,
+    /// <item><b>Error tracking</b> is unaffected. <see cref="InductorParser.Lexing.Lexer.RecordFailure(System.Int32,System.String,System.Boolean)">RecordFailure</see> /
+    /// <see cref="InductorParser.Lexing.Lexer.RecordCompositeFailure(System.Int32,System.String,System.Boolean)">RecordCompositeFailure</see> record at the explicit position the rule passes,
     /// not at the live cursor, and the deepest-failure mark is a max-only
     /// high-water value. A transaction restores the cursor (and that mark) by
     /// value on rollback, so a jump that's later rolled back leaves no trace in
@@ -310,9 +310,9 @@ public sealed partial class Lexer
     /// <item><b>Tracing</b> is unaffected but not automatic. Trace output is
     /// diagnostic logging keyed on transaction depth and validated token
     /// offsets, so a cursor move can't corrupt it, but unlike <see cref="Read"/>
-    /// SetPosition emits no trace line. A rule that advances the cursor over a span by
-    /// hand should emit its own summary via the Rule.TraceSuccess /
-    /// TraceFailure helpers (as the built-in ScanWhile / ScanUntil do), or that
+    /// <see cref="InductorParser.Lexing.Lexer.SetPosition(System.Int32)">SetPosition</see> emits no trace line. A rule that advances the cursor over a span by
+    /// hand should emit its own summary via the <see cref="InductorParser.Rule.TraceSuccess(InductorParser.Lexing.Lexer,InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceSuccess</see> /
+    /// TraceFailure helpers (as the built-in <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> do), or that
     /// span won't appear in the trace.</item>
     /// </list>
     /// </remarks>
@@ -441,7 +441,7 @@ public sealed partial class Lexer
 
     /// <summary>
     /// Advance one token and return it. The token shape is one grapheme
-    /// cluster in normal mode, or one rune in the WithinToken sub-lexer mode.
+    /// cluster in normal mode, or one rune in the <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see> sub-lexer mode.
     /// </summary>
     /// <remarks>
     /// Cheap: <see cref="Token"/> is a stack-only ref struct that stores an
@@ -492,7 +492,7 @@ public sealed partial class Lexer
 
     /// <summary>
     /// Open a lookahead <see cref="Probe"/>. Used by rules that do pure
-    /// lookahead (Peek, Not, ScanUntil's stopper and escape-start probes):
+    /// lookahead (Peek, Not, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>'s stopper and escape-start probes):
     /// excursions whose failures are off the real parse path and can't
     /// influence the error report.
     /// </summary>

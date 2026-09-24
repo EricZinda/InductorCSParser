@@ -6,18 +6,18 @@ namespace InductorParser.SyntaxTree;
 /// the input from offset 0.
 /// </summary>
 /// <remarks>
-/// Line and CharColumn are zero-based. CharColumn counts UTF-16 code units, the same unit as
+/// Line and <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">CharColumn</see> are zero-based. <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">CharColumn</see> counts UTF-16 code units, the same unit as
 /// <see cref="CharIndex"/>, matching the Language Server Protocol convention editor diagnostics
-/// use. <see cref="TokenColumn"/> is the grapheme-based counterpart, for human-facing output. Line breaks follow UTS #18 §1.6 (RL1.6), the same set Rules.EndOfLine() accepts: LF, CRLF (one
+/// use. <see cref="TokenColumn"/> is the grapheme-based counterpart, for human-facing output. Line breaks follow UTS #18 §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> accepts: LF, CRLF (one
 /// break, not two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029). Keeping the two sets
-/// aligned matters for grammars that use EndOfLine() on Unicode input: every terminator the grammar
+/// aligned matters for grammars that use <see cref="InductorParser.Rules.EndOfLine">EndOfLine()</see> on Unicode input: every terminator the grammar
 /// consumes also bumps the reported line. That set is a superset of the LF, CRLF, and lone CR a
 /// Language Server Protocol client recognizes, so the reported line matches an editor on ordinary source and diverges
 /// only on input that contains the rarer terminators (VT, FF, NEL, LS, PS).
 /// <para>
 /// <see cref="Input"/> is always the user's original input. When a grammar normalizes (FormC by
 /// default), the parser translates parseInput coordinates back to original-input coordinates before
-/// constructing the SourcePosition, so the value here is in the text the user typed in.
+/// constructing the <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see>, so the value here is in the text the user typed in.
 /// </para>
 /// </remarks>
 public readonly struct SourcePosition
@@ -84,7 +84,7 @@ public readonly struct SourcePosition
 
     /// <summary>
     /// The source string <see cref="CharIndex"/> is an offset into, always the user's original input
-    /// even for parses that normalized under the hood. Never null. A SourcePosition built from a null
+    /// even for parses that normalized under the hood. Never null. A <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see> built from a null
     /// input stores the empty string.
     /// </summary>
     public string Input { get; }

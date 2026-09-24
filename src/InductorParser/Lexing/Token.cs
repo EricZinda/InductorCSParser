@@ -35,14 +35,14 @@ namespace InductorParser.Lexing;
 /// One chunk of input the lexer just consumed, or the EOF token at the end
 /// of the input. In the default grapheme mode a token is one Unicode
 /// grapheme (i.e. one UAX #29 grapheme cluster, possibly several runes
-/// wide). In the one-rune-per-token sub-lexer mode (WithinToken) it's one
+/// wide). In the one-rune-per-token sub-lexer mode (<see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see>) it's one
 /// rune, which can be a fragment of a cluster, and under Compile(null) it
 /// can be a lone surrogate. Rather than copying the matched text into a new
 /// string, a Token keeps a reference to the original input plus an offset and
 /// a length.
 /// </summary>
 /// <remarks>
-/// Not to be confused with the <c>Token</c> factory in
+/// Not to be confused with the <see cref="InductorParser.Rules.Token(char)">Token</see> factory in
 /// <see cref="InductorParser.Rules"/>, which constructs a rule that matches
 /// one Token from the input. 
 /// </remarks>
@@ -98,7 +98,7 @@ public readonly ref struct Token
     /// to special-case the multi-rune path.
     /// </summary>
     /// <remarks>
-    /// Returned as int rather than System.Text.Rune because -1 is the "no
+    /// Returned as int rather than <see cref="System.Text.Rune">System.Text.Rune</see> because -1 is the "no
     /// single rune here" marker, and Rune has no invalid state.
     /// </remarks>
     public int RuneValue

@@ -10,7 +10,7 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 /// <summary>
-/// A set of tokens, used to describe character classes for OneOf and NoneOf.
+/// A set of tokens, used to describe character classes for <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> and NoneOf.
 /// A token is either a single Unicode scalar value (rune) or a multi-rune
 /// grapheme cluster (skin-toned emoji, a joined family emoji, regional-indicator pair,
 /// base+combining-mark grapheme).
@@ -33,7 +33,7 @@ namespace InductorParser;
 ///     var emojiOrLetters    = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
 /// </code>
 /// <para>
-/// Internally a TokenSet keeps two pieces. _ranges is a sorted, non-overlapping,
+/// Internally a <see cref="InductorParser.TokenSet">TokenSet</see> keeps two pieces. _ranges is a sorted, non-overlapping,
 /// non-adjacent array of code-point runs that holds every single-rune member.
 /// _multiRuneGraphemes is a sorted ordinal, deduped array of grapheme strings
 /// that holds every member that occupies two or more runes. Single-rune
@@ -121,7 +121,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <summary>
     /// Read-only view of the multi-rune grapheme entries, sorted ordinal.
     /// Empty when the set has no multi-rune content. Returns a
-    /// <c>ReadOnlySpan</c> so callers get foreach and indexing without
+    /// <see cref="System.ReadOnlySpan{T}">ReadOnlySpan</see> so callers get foreach and indexing without
     /// allocation. For the iterator shape that composes with LINQ and
     /// can cross yield boundaries, use
     /// <see cref="EnumerateMultiRuneGraphemes"/> instead.
@@ -132,9 +132,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <summary>
     /// Iterator-shaped companion to <see cref="MultiRuneGraphemes"/>.
     /// Yields the same entries in the same order, but as
-    /// <c>IEnumerable&lt;string&gt;</c> so LINQ operators apply and the
+    /// <see cref="System.Collections.Generic.IEnumerable{T}">IEnumerable&lt;string&gt;</see> so LINQ operators apply and the
     /// values can flow through a yield-returning method. The
-    /// <c>ReadOnlySpan</c> property is faster (no enumerator, supports
+    /// <see cref="System.ReadOnlySpan{T}">ReadOnlySpan</see> property is faster (no enumerator, supports
     /// indexing) and should be preferred when the caller doesn't need
     /// either of those features.
     /// </summary>
@@ -310,7 +310,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// set's entries are in the same form the lexer produces on match-time
     /// input. Under FormC the lexer emits FormC-normalized text, so the set
     /// must contain entries in that form. Used by OneOfRule / NoneOfRule's
-    /// Compile-time pipeline.
+    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>-time pipeline.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -321,13 +321,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// caller to surface as an offender. OneOfRule / NoneOfRule match one
     /// grapheme per token, so a multi-grapheme entry can never match in
     /// isolation, and dropping it with a reported offender gives the user a
-    /// clear Compile-time error.
+    /// clear <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>-time error.
     /// </para>
     /// <para>
     /// Surrogate runes (U+D800..U+DFFF) pass through unchanged: they aren't
-    /// runes (string.Normalize throws on them), and a normalized Compile won't
+    /// runes (string.Normalize throws on them), and a normalized <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> won't
     /// see them in input, so leaving them in is harmless and preserves the
-    /// unnormalized-Compile semantics some grammars rely on.
+    /// unnormalized-<see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> semantics some grammars rely on.
     /// </para>
     /// <para>
     /// Entries whose Normalize call throws ArgumentException (the runtime's way
@@ -509,12 +509,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <remarks>
     /// You call this on a set yourself. Nothing in the parser calls it for you,
     /// so it's opt-in: use it to project a set's members into a normalization
-    /// form ahead of time. The usual reason is a OneOf/NoneOf member that a
-    /// FormKC or FormKD Compile would turn into more than one grapheme, like the
+    /// form ahead of time. The usual reason is a <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see>/<see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> member that a
+    /// FormKC or FormKD <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> would turn into more than one grapheme, like the
     /// ﬁ ligature becoming "fi". A set member has to be a single grapheme, so
-    /// Compile can't make that expansion for you. It errors and points you here.
+    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> can't make that expansion for you. It errors and points you here.
     /// Call this first to split the entry into separate members ('f' and 'i'),
-    /// then Compile with that same form so the input is normalized to match.
+    /// then <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> with that same form so the input is normalized to match.
     /// </remarks>
     public TokenSet WithCompatibilityEquivalents(NormalizationForm form)
     {
@@ -747,7 +747,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return true;
     }
 
-    /// <summary><see cref="Equals(TokenSet)"/> for an arbitrary object, returning false for non-TokenSet values.</summary>
+    /// <summary><see cref="Equals(TokenSet)"/> for an arbitrary object, returning false for non-<see cref="InductorParser.TokenSet">TokenSet</see> values.</summary>
     public override bool Equals(object? obj) => obj is TokenSet other && Equals(other);
 
     /// <summary>
@@ -803,7 +803,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// else as U+XXXX. Multi-rune graphemes render as the user-perceived
     /// character itself, except that a control character or line/paragraph
     /// separator inside a grapheme renders as U+XXXX so something like the CRLF
-    /// entry in LineTerminators / Ascii.AnyWhitespace can't inject a raw newline
+    /// entry in <see cref="InductorParser.TokenSet.LineTerminators">LineTerminators</see> / <see cref="InductorParser.TokenSet.Ascii.AnyWhitespace">Ascii.AnyWhitespace</see> can't inject a raw newline
     /// into a one-line trace. Sets with more than MaxRenderedEntries entries are
     /// truncated with a "+N more" tail, keeping trace lines legible without
     /// dragging in the entire Unicode database.
@@ -858,8 +858,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     /// <summary>
-    /// The empty set, containing no tokens. Equivalent to default(TokenSet),
-    /// exposed as a named constant so callers can write TokenSet.Empty instead
+    /// The empty set, containing no tokens. Equivalent to default(<see cref="InductorParser.TokenSet">TokenSet</see>),
+    /// exposed as a named constant so callers can write <see cref="InductorParser.TokenSet.Empty">TokenSet.Empty</see> instead
     /// of relying on "default happens to mean empty."
     /// </summary>
     public static readonly TokenSet Empty = default;
@@ -871,7 +871,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// </summary>
     /// <remarks>
     /// Handy as the base for "everything except X" sets: <c>Universe - someSet</c>
-    /// is the composable TokenSet form of <c>NoneOf(X)</c>, and you can keep
+    /// is the composable <see cref="InductorParser.TokenSet">TokenSet</see> form of <c>NoneOf(X)</c>, and you can keep
     /// combining it with <c>|</c>, <c>&amp;</c>, and <c>-</c>. Leaving the
     /// surrogate block out keeps that subtraction safe: a grammar that asks for
     /// "everything except space" won't quietly start admitting lone surrogates.
@@ -882,7 +882,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// scalar level. The consequence: <c>OneOf(Universe)</c> matches a
     /// single-scalar token but never a multi-rune grapheme like CRLF or a
     /// skin-toned emoji, and <c>Universe - X</c> leaves those tokens out too
-    /// (they were never in it). To match any token at all, use <c>AnyToken()</c>.
+    /// (they were never in it). To match any token at all, use <see cref="Rules.AnyToken"/>.
     /// To include specific clusters, add them with <c>Graphemes(...)</c>, like
     /// <c>Universe | Graphemes("\r\n")</c>.
     /// </para>
@@ -896,13 +896,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// pre-rejects lone surrogates from input, so this set has nothing to match.
     /// </summary>
     /// <remarks>
-    /// The two named entry points for putting surrogates into a TokenSet are
+    /// The two named entry points for putting surrogates into a <see cref="InductorParser.TokenSet">TokenSet</see> are
     /// this constant (the whole block) and <see cref="SurrogateRange"/> (a
     /// sub-block). Range, Single, and Runes reject surrogate endpoints /
-    /// arguments. So Surrogates and SurrogateRange are the only places fresh
+    /// arguments. So Surrogates and <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">SurrogateRange</see> are the only places fresh
     /// surrogates come from. From there union, intersection, and difference
     /// move them between sets. A grammar that doesn't name Surrogates or
-    /// SurrogateRange never gets one in any TokenSet it builds.
+    /// <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">SurrogateRange</see> never gets one in any <see cref="InductorParser.TokenSet">TokenSet</see> it builds.
     /// </remarks>
     public static readonly TokenSet Surrogates =
         new TokenSet(new[] { new Interval(0xD800, 0xDFFF) });
@@ -985,7 +985,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     /// <summary>
-    /// Construct a TokenSet from a list of code-point intervals. Each element
+    /// Construct a <see cref="InductorParser.TokenSet">TokenSet</see> from a list of code-point intervals. Each element
     /// is a closed range [Low, High]. The input doesn't need to be sorted or
     /// non-overlapping. The constructor normalizes (sorts, merges adjacent,
     /// drops empties). Bulk factory for large generated tables that would be
@@ -1534,7 +1534,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// The set of Unicode scalar values that are letters: the same characters
-    /// char.IsLetter and Rune.IsLetter consider letters (uppercase, lowercase,
+    /// <see cref="char.IsLetter(char)">char.IsLetter</see> and <a href="https://learn.microsoft.com/dotnet/api/system.text.rune.isletter">Rune.IsLetter</a> consider letters (uppercase, lowercase,
     /// titlecase, modifier, and other letters).
     /// </summary>
     /// <remarks>
@@ -1557,8 +1557,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     public static TokenSet Digits => _digits.Value;
 
     /// <summary>
-    /// Intra-line whitespace: every rune char.IsWhiteSpace accepts except the
-    /// UTS #18 line terminators. See <see cref="LineTerminators"/> for those.
+    /// Whitespace within a line: Unicode's White_Space property (what
+    /// char.IsWhiteSpace tests) minus the UTS #18 line terminators. That
+    /// leaves TAB plus every Space_Separator (Zs) character: SPACE, NO-BREAK
+    /// SPACE, OGHAM SPACE MARK, EN QUAD through HAIR SPACE, NARROW NO-BREAK
+    /// SPACE, MEDIUM MATHEMATICAL SPACE, and IDEOGRAPHIC SPACE. It's the class
+    /// Perl, PCRE, and Java regexes call horizontal whitespace, <c>\h</c>.
+    /// See <see cref="LineTerminators"/> for the terminators.
     /// </summary>
     public static TokenSet InlineWhitespace => _inlineWhitespace.Value;
 
@@ -1589,7 +1594,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// Matches what Java's \R and most modern regex engines treat as a
     /// newline (ECMAScript's "line terminator" is the narrower LF / CR /
     /// LS / PS subset). CRLF lives in the set as a
-    /// multi-rune entry, so OneOf / NoneOf / ScanUntil / ScanWhile against this
+    /// multi-rune entry, so <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> / <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see> against this
     /// set all treat the CRLF grapheme as one terminator.
     /// </remarks>
     public static readonly TokenSet LineTerminators = BuildLineTerminators();
@@ -1634,12 +1639,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// The single-member set holding U+FFFD REPLACEMENT CHARACTER.
     /// </summary>
     /// <remarks>
-    /// .NET's Unicode decoders (Encoding.UTF8, Encoding.Unicode,
-    /// Encoding.UTF32) substitute U+FFFD for ill-formed byte sequences under the
+    /// .NET's Unicode decoders (<see cref="System.Text.Encoding.UTF8">Encoding.UTF8</see>, <see cref="System.Text.Encoding.Unicode">Encoding.Unicode</see>,
+    /// <see cref="System.Text.Encoding.UTF32">Encoding.UTF32</see>) substitute U+FFFD for ill-formed byte sequences under the
     /// default DecoderReplacementFallback, so a U+FFFD in your input is the
     /// fingerprint of an upstream decoder that swallowed something malformed.
     /// Grammars that want to surface or reject those markers can use
-    /// OneOf(TokenSet.Replacement) or NoneOf(TokenSet.Replacement | ...).
+    /// OneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see>) or NoneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see> | ...).
     /// </remarks>
     public static readonly TokenSet Replacement = Single(0xFFFD);
 
@@ -1668,13 +1673,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         /// <remarks>
         /// VT (U+000B) and FF (U+000C) look like ordinary whitespace, but
         /// UTS #18 counts them as line terminators. That's why they're in
-        /// <see cref="TokenSet.LineTerminators"/>, why Rules.EndOfLine()
+        /// <see cref="TokenSet.LineTerminators"/>, why <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
         /// consumes them, and why <see cref="InlineWhitespace"/> (SPACE and TAB)
         /// leaves them out. Use this set for grammars that treat newlines as
         /// ordinary whitespace. To keep line terminators separate from
         /// intra-line whitespace, use <see cref="InlineWhitespace"/> and
-        /// Rules.EndOfLine() instead. CR, LF, and the CRLF grapheme all live in
-        /// the set so OneOf / NoneOf / ScanUntil match each consistently.
+        /// <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> instead. CR, LF, and the CRLF grapheme all live in
+        /// the set so <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> match each consistently.
         /// </remarks>
         public static readonly TokenSet AnyWhitespace =
             InlineWhitespace
@@ -1741,9 +1746,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// (U+2029).
     /// </summary>
     /// <remarks>
-    /// This is the same set <see cref="LineTerminators"/> and Rules.EndOfLine()
+    /// This is the same set <see cref="LineTerminators"/> and <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
     /// recognize, so scanning raw input with it agrees with the line the parser
-    /// reports (ParseResult.ErrorLine, SourcePosition.Line). It tests one code
+    /// reports (<see cref="InductorParser.ParseResult.ErrorLine">ParseResult.ErrorLine</see>, <see cref="InductorParser.SyntaxTree.SourcePosition.Line">SourcePosition.Line</see>). It tests one code
     /// point, so the two-rune CRLF grapheme isn't matched as a unit, but the CR
     /// of a CRLF is itself a terminator, so a char-by-char scan still stops a line
     /// at the right place.

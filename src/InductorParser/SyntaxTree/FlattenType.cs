@@ -27,7 +27,7 @@ public enum FlattenType
     /// Use this for syntax the grammar has to assert is present but the consumer doesn't care
     /// about: punctuation, keywords, whitespace. The dropped text doesn't appear in
     /// <see cref="Symbol.ToString()"/>, but an enclosing Symbol's <see cref="Symbol.SourceText"/>
-    /// still includes it since SourceText reaches back to the original input by character range
+    /// still includes it since <see cref="InductorParser.SyntaxTree.Symbol.SourceText">SourceText</see> reaches back to the original input by character range
     /// rather than walking the tree.
     /// </remarks>
     Delete,

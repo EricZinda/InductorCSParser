@@ -12,9 +12,9 @@ namespace InductorParser.SyntaxTree;
 /// </summary>
 /// <remarks>
 /// A Symbol has one of two shapes. A composite has a list of child Symbols and comes from
-/// rules that build structure (And, Or, OneOrMore). A leaf stores a section of the original
+/// rules that build structure (And, Or, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">OneOrMore</see>). A leaf stores a section of the original
 /// input (a ReadOnlyMemory&lt;char&gt;) and comes from rules that match content (Token, Literal,
-/// OneOf, ScanUntil). The parse never copies input into a new string.
+/// <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>). The parse never copies input into a new string.
 /// <para>
 /// A Symbol can also report where in the source it came from. <see cref="SourceRange"/> returns
 /// a Start/End pair of <see cref="SourcePosition"/>s in the same char / token / line / column
@@ -33,7 +33,7 @@ public sealed class Symbol
     /// </summary>
     /// <remarks>
     /// Consumers like AndRule filter it out before it reaches a parent's <see cref="Children"/>
-    /// list, so a Delete rule never contributes a Discarded Symbol to the final tree. Never
+    /// list, so a <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> rule never contributes a Discarded Symbol to the final tree. Never
     /// stored as a child of any real Symbol.
     /// </remarks>
     public static readonly Symbol Discarded = new Symbol(default, FlattenType.Delete, ReadOnlyMemory<char>.Empty);
@@ -77,8 +77,8 @@ public sealed class Symbol
     public SymbolId Id { get; }
 
     /// <summary>
-    /// How this Symbol participates when the tree is flattened: Delete drops it, Flatten lifts
-    /// its children into the parent, Preserve keeps it as a node.
+    /// How this Symbol participates when the tree is flattened: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> drops it, Flatten lifts
+    /// its children into the parent, <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> keeps it as a node.
     /// </summary>
     public FlattenType FlattenType { get; }
 
@@ -90,7 +90,7 @@ public sealed class Symbol
     /// </summary>
     /// <remarks>
     /// <paramref name="consumedSpan"/> is every character the rule matched, including ones that
-    /// never make it into the tree (FlattenType.Delete children filtered out of
+    /// never make it into the tree (<see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> children filtered out of
     /// <see cref="Children"/>), so <see cref="SourceRange"/> / <see cref="SourceText"/> report
     /// the full match. For a zero-width match, pass a zero-length memory at the rule's anchor
     /// offset so callers still get a position.
@@ -277,12 +277,12 @@ public sealed class Symbol
     /// renders the concatenated text of its children.
     /// </summary>
     /// <remarks>
-    /// On the default parse path, FlattenType.Delete rules are filtered out of the tree, so the
-    /// characters they matched don't appear in the result. FlattenType.Flatten Symbols are gone
+    /// On the default parse path, <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> rules are filtered out of the tree, so the
+    /// characters they matched don't appear in the result. <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see> Symbols are gone
     /// too, but their children were lifted into the parent, so the characters those children
     /// matched do still appear. To get the exact input verbatim, keep the string you passed to
-    /// Parse, read <see cref="SourceText"/>, or set ParseOptions.PreserveAllSymbols to keep every
-    /// grammar node (including Delete ones) in the tree.
+    /// Parse, read <see cref="SourceText"/>, or set <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> to keep every
+    /// grammar node (including <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> ones) in the tree.
     /// <para>
     /// When the grammar normalized the input (any form other than <c>Compile(null)</c>), a leaf's
     /// text comes from the normalized parse input, so this renders the normalized form the parser
@@ -368,8 +368,8 @@ public sealed class Symbol
     /// <remarks>
     /// Unlike <see cref="ToString"/>, which concatenates the text of the leaves present in the
     /// tree and renders it in the normalized form the parser matched, this reaches back to the
-    /// original input by character range, so it includes characters matched by FlattenType.Delete
-    /// leaves (the default for Token, Literal, EndOfLine) that
+    /// original input by character range, so it includes characters matched by <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>
+    /// leaves (the default for Token, Literal, <see cref="InductorParser.Rules.EndOfLine(System.Boolean)">EndOfLine</see>) that
     /// aren't in the tree for <see cref="ToString"/> to render. When the grammar normalized the
     /// input, the parse-input offsets are translated back to the original before the section is
     /// taken, so the result is always a piece of the user's original input.
@@ -394,11 +394,11 @@ public sealed class Symbol
 
     /// <summary>
     /// Appends this Symbol's flattened contribution to <paramref name="result"/>: nothing for
-    /// Delete, the lifted children for Flatten, and a rebuilt node (or this Symbol unchanged) for
+    /// <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>, the lifted children for Flatten, and a rebuilt node (or this Symbol unchanged) for
     /// Preserve.
     /// </summary>
     /// <remarks>
-    /// Flattens a tree after it has been parsed with ParseOptions.PreserveAllSymbols which ignores the default flattening.
+    /// Flattens a tree after it has been parsed with <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> which ignores the default flattening.
     /// Does nothing to a tree that has already been flattened. <see cref="Flatten"/> is the convenience entry point.
     /// </remarks>
     public void FlattenInto(List<Symbol> result)
@@ -441,11 +441,11 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Returns a flattened copy of this subtree: Delete nodes dropped and Flatten nodes' children
+    /// Returns a flattened copy of this subtree: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> nodes dropped and Flatten nodes' children
     /// lifted into their parents. See <see cref="FlattenInto"/>.
     /// </summary>
     /// <remarks>
-    /// Flattens a tree after it has been parsed with ParseOptions.PreserveAllSymbols which ignores the default flattening.
+    /// Flattens a tree after it has been parsed with <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> which ignores the default flattening.
     /// Does nothing to a tree that has already been flattened.
     /// </remarks>
     public IReadOnlyList<Symbol> Flatten()

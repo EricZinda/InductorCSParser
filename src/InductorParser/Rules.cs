@@ -30,9 +30,9 @@ namespace InductorParser;
 /// because every grammar ends up wanting them.
 ///
 /// Every rule has a default <see cref="FlattenType"/> that
-/// controls how the match contributes to the parse tree: Delete
+/// controls how the match contributes to the parse tree: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>
 /// drops the node, Flatten lifts its children into the parent,
-/// Preserve keeps the rule's Symbol. Each factory's summary names its
+/// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> keeps the rule's Symbol. Each factory's summary names its
 /// default. Override this on any rule by using
 /// <see cref="Rule.Flatten(FlattenType)"/> to change it for a
 /// specific use.
@@ -43,8 +43,8 @@ namespace InductorParser;
 /// <item><description>
 /// <see cref="Rule.As(string)"/> (or <see cref="Rule.As(SymbolId)"/>)
 /// names the rule so trace output, error messages, and
-/// <c>Tree.Find</c> can refer to it. Naming also flips the rule's
-/// <see cref="FlattenType"/> to Preserve so Find can see it.
+/// <see cref="Symbol.Find(SymbolId)"/> can refer to it. Naming also flips the rule's
+/// <see cref="FlattenType"/> to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> so Find can see it.
 /// </description></item>
 /// <item><description>
 /// <see cref="Rule.WithError(string, bool)"/> attaches a custom
@@ -201,7 +201,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// The workhorse character-class rule.
-    /// A TokenSet can hold sets of anything the user sees as one
+    /// A <see cref="InductorParser.TokenSet">TokenSet</see> can hold sets of anything the user sees as one
     /// character, including composed sequences like skin-toned
     /// emoji, regional-indicator flags, and family emoji. So a set
     /// built with <c>TokenSet.Letters | TokenSet.Graphemes("🇺🇸")</c>
@@ -281,13 +281,13 @@ public static class Rules
     /// whitespace runs, and other character-class runs where you want the run as
     /// a single symbol, not N independent symbols. The matched text is the same as
     /// <c>AtLeast(minimumCount, OneOf(set))</c>, but the runtime
-    /// cost is very different. The <c>OneOf</c> form opens a transaction
+    /// cost is very different. The <see cref="Rules.OneOf(TokenSet)"/> form opens a transaction
     /// and allocates a Symbol per token. This rule opens one transaction at the top, runs a tight
     /// scan loop in the lexer, and emits one Symbol over the whole run.
     ///
-    /// The exact converse of <see cref="ScanUntil(TokenSet, bool)"/>: ScanUntil
-    /// stops when the next token is in its stop set, ScanWhile stops when
-    /// the next token is outside its match set. Use <c>ScanWhile</c> when
+    /// The exact converse of <see cref="ScanUntil(TokenSet, bool)"/>: <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>
+    /// stops when the next token is in its stop set, <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see> stops when
+    /// the next token is outside its match set. Use <see cref="Rules.ScanWhile"/> when
     /// the run's character class is the natural way to describe the body
     /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet, bool)"/>
     /// when only the boundary is namable (string bodies, comment bodies).
@@ -395,7 +395,7 @@ public static class Rules
         new ScanUntilRule(stopAt, eofIsTerminator);
 
     /// <summary>
-    /// Rule-stopper ScanUntil with escape sequences. Default
+    /// Rule-stopper <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see> with escape sequences. Default
     /// <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -441,7 +441,7 @@ public static class Rules
     /// Fails only at EOF. Use it as a catch-all for pass-through text:
     /// grammars that pull out a few structured pieces (a
     /// <c>{{ name }}</c> interpolation in a template, say) and copy
-    /// everything else through as-is use <c>AnyToken()</c> for the "any
+    /// everything else through as-is use <see cref="Rules.AnyToken"/> for the "any
     /// other character" branch.
     /// </remarks>
     public static Rule AnyToken() => new AnyTokenRule();
@@ -474,7 +474,7 @@ public static class Rules
 
     /// <summary>
     /// Wrap <paramref name="inner"/> so it can be given its own name with
-    /// <c>.As(string)</c> or <c>.As(SymbolId)</c>, letting the same rule
+    /// <see cref="InductorParser.Rule.As(string)">.As(string)</see> or <see cref="InductorParser.Rule.As(InductorParser.SyntaxTree.SymbolId)">.As(SymbolId)</see>, letting the same rule
     /// shape appear in a grammar under more than one name and be found
     /// under each. The alias matches exactly what <paramref name="inner"/>
     /// matches. Default <see cref="FlattenType"/>:
@@ -509,8 +509,8 @@ public static class Rules
     /// </code>
     /// </para>
     /// <para>
-    /// Errors: the inner's own <c>.WithError</c> fires from inside it as
-    /// usual. The alias's own <c>.WithError</c> is anchored at the alias's
+    /// Errors: the inner's own <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">.WithError</see> fires from inside it as
+    /// usual. The alias's own <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">.WithError</see> is anchored at the alias's
     /// start, never deeper than where the inner fails, so under "deepest
     /// failure wins" the inner's failure wins unless the alias's is marked
     /// forced.
@@ -692,8 +692,9 @@ public static class Rules
         );
 
     /// <summary>
-    /// Match one or more intra-line whitespace tokens as defined by
-    /// <c>TokenSet.InlineWhitespace</c>. Doesn't match line terminators
+    /// Match one or more whitespace tokens within a line: TAB and the
+    /// Unicode space separators, per <see cref="TokenSet.InlineWhitespace"/>.
+    /// Doesn't match line terminators
     /// (<c>\n</c>, <c>\r</c>, <c>\r\n</c>, NEL, LINE SEPARATOR,
     /// PARAGRAPH SEPARATOR, VT, FF). Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
@@ -711,7 +712,7 @@ public static class Rules
 
     /// <summary>
     /// Match one or more whitespace tokens, where each token is either
-    /// an intra-line whitespace rune (per <c>TokenSet.InlineWhitespace</c>)
+    /// an intra-line whitespace rune (per <see cref="TokenSet.InlineWhitespace"/>)
     /// or a line terminator, using <see cref="EndOfLine"/>, which handles
     /// all end-of-line characters including CRLF, a two-rune unit. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
@@ -800,12 +801,12 @@ public static class Rules
     /// whole token. Inner-rule symbols are discarded. With tracing turned
     /// on, the inner rule's per-rune steps don't show up in the trace,
     /// since the sub-lexer that walks the token doesn't have the trace
-    /// sink. WithinToken still logs its own line for whether the token
+    /// sink. <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see> still logs its own line for whether the token
     /// matched, so you see the outcome but not the steps inside. The inner
     /// parse is bounded to the token's rune span. The sub-lexer's recursion,
     /// rule-count, timeout, and cancellation budgets all count against
-    /// the outer parse: a Cancel() or expired Timeout observed on
-    /// either lexer trips both, and MaxDepth / RuleCountLimit cover the
+    /// the outer parse: a <see cref="InductorParser.ParseCancellation.Cancel">Cancel()</see> or expired Timeout observed on
+    /// either lexer trips both, and <see cref="InductorParser.ParseOptions.MaxDepth">MaxDepth</see> / <see cref="InductorParser.ParseOptions.RuleCountLimit">RuleCountLimit</see> cover the
     /// combined outer-plus-inner work rather than letting the inner
     /// rule spend a fresh budget on top of the outer's.
     /// </para>
@@ -813,9 +814,9 @@ public static class Rules
     /// <param name="innerRule">
     /// The rule to run against the token's runes. Must consume every
     /// rune of the token on success. A rule that matches only a
-    /// prefix causes the whole <c>WithinToken</c> to fail. Any rule
+    /// prefix causes the whole <see cref="Rules.WithinToken"/> to fail. Any rule
     /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
-    /// <c>OneOf</c>, etc.).
+    /// <see cref="Rules.OneOf(TokenSet)"/>, etc.).
     /// </param>
     public static Rule WithinToken(Rule innerRule) => new WithinTokenRule(innerRule);
 
@@ -831,10 +832,10 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// <para>
-    /// See docs/UnicodeGotchas.md for recipes that reproduce the
+    /// See <a href="../docs/UnicodeGotchas.md">Unicode Gotchas</a> for recipes that reproduce the
     /// identifier rules of specific languages (Python 3, Rust,
     /// ECMAScript) via these parameters plus the form chosen at
-    /// <c>Compile</c> time.
+    /// <see cref="Rule.Compile(System.Text.NormalizationForm?)"/> time.
     /// </para>
     /// </remarks>
     /// <param name="extraStartRunes">

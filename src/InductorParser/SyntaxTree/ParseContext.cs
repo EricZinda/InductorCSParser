@@ -20,13 +20,13 @@ public sealed class ParseContext
     public string ParseInput { get; }
 
     /// <summary>
-    /// The form Compile was called with, used to translate <see cref="ParseInput"/> offsets back to
+    /// The form <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> was called with, used to translate <see cref="ParseInput"/> offsets back to
     /// <see cref="OriginalInput"/> offsets. Null when no normalization was configured.
     /// </summary>
     public NormalizationForm? NormalizationForm { get; }
 
     /// <summary>
-    /// The Rule the parse was launched against. Symbol.DisplayName uses it to resolve a Symbol's
+    /// The Rule the parse was launched against. <see cref="InductorParser.SyntaxTree.Symbol.DisplayName">Symbol.DisplayName</see> uses it to resolve a Symbol's
     /// SymbolId back to the rule name the grammar gave it, without forcing the consumer to pass the
     /// grammar through to every tree-walker. Null when no grammar root was supplied, as with
     /// hand-built Symbols.

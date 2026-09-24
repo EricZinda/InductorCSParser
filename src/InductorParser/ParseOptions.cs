@@ -12,10 +12,10 @@ namespace InductorParser;
 /// messages.
 /// </summary>
 /// <remarks>
-/// Unicode normalization form is a grammar-level decision committed at Compile
+/// Unicode normalization form is a grammar-level decision committed at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>
 /// time, not a parse option. Call rule.Compile() with a Normalization form (or
 /// null to disable normalization) before parsing if you want a form other 
-/// than the FormC default. See Rule.Compile(NormalizationForm?).
+/// than the FormC default. See <see cref="Rule.Compile(System.Text.NormalizationForm?)"/>.
 /// <para>
 /// Failure positions reported in <see cref="ParseResult"/> are always in the
 /// caller's original-input coordinates, even when the grammar was compiled
@@ -41,8 +41,8 @@ public sealed class ParseOptions
     /// </summary>
     /// <remarks>
     /// Each rule invocation counts as one unit, and each iteration of a
-    /// bulk-scan inner loop (ScanWhile, ScanUntil, the AdvanceWhile*
-    /// primitives, or any rule that calls Lexer.TickBudget) counts as one
+    /// bulk-scan inner loop (<see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>, the AdvanceWhile*
+    /// primitives, or any rule that calls <see cref="InductorParser.Lexing.Lexer.TickBudget">Lexer.TickBudget</see>) counts as one
     /// too. Because it's a count and not a wall-clock measurement, the same input
     /// against the same grammar trips at the same point on every run. The
     /// default of 10,000,000 lets well-formed parses through (a 1 MB file
@@ -82,9 +82,9 @@ public sealed class ParseOptions
     public int MaxDepth { get; set; } = 1000;
 
     /// <summary>
-    /// Wall-clock limit. The parse loop polls Stopwatch.Elapsed synchronously
+    /// Wall-clock limit. The parse loop polls <see cref="System.Diagnostics.Stopwatch.Elapsed">Stopwatch.Elapsed</see> synchronously
     /// from inside its own loop, so the deadline trips even on WebGL where
-    /// there's no background timer thread. Set to TimeSpan.Zero to disable,
+    /// there's no background timer thread. Set to <see cref="System.TimeSpan.Zero">TimeSpan.Zero</see> to disable,
     /// matching the <see cref="RuleCountLimit"/> / <see cref="MaxDepth"/>
     /// convention.
     /// </summary>
@@ -113,33 +113,33 @@ public sealed class ParseOptions
     /// <summary>
     /// External cancellation signal. Null means no cancellation source. See
     /// <see cref="ParseCancellation"/> for what it does, why it's a custom type
-    /// instead of System.Threading.CancellationToken, and how to bridge from an
-    /// existing CancellationToken.
+    /// instead of <see cref="System.Threading.CancellationToken">System.Threading.CancellationToken</see>, and how to bridge from an
+    /// existing <see cref="System.Threading.CancellationToken">CancellationToken</see>.
     /// </summary>
     public ParseCancellation? Cancellation { get; set; }
 
     /// <summary>
     /// When true, the parser ignores the flatten settings of the rules and
     /// Parse returns a tree whose shape matches the grammar
-    /// one-to-one: every FlattenType.Flatten Symbol, every FlattenType.Delete
+    /// one-to-one: every <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see> Symbol, every <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>
     /// node, and every individual leaf symbol is present exactly where the
     /// grammar placed it. Alias subtrees are the one exception, described
     /// in the remarks.
     /// </summary>
     /// <remarks>
-    /// Turn this on to debug or inspect a grammar, to PrintTree the full
+    /// Turn this on to debug or inspect a grammar, to <see cref="InductorParser.ParseResult.PrintTree">PrintTree</see> the full
     /// structure, or to Find(rule) against Symbols that the default path would
     /// lift out. When off (the default) the parser applies each rule's FlattenType before
-    /// returning so that FlattenType.Delete nodes are gone, FlattenType.Flatten
+    /// returning so that <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> nodes are gone, <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>
     /// Symbols have their children lifted into the parent, and
-    /// FlattenType.Preserve Symbols remain as findable nodes. That's the shape
+    /// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> Symbols remain as findable nodes. That's the shape
     /// most callers actually want to walk (i.e. what the grammar was designed for).
     /// This setting is for debugging.
     /// <para>
     /// The alias exception: an alias substitutes its identity for its inner's
     /// even here, exactly as it does in the production tree. An alias over a
     /// named rule shows the match under the alias's id with the inner's own
-    /// Symbol gone, and a FlattenType.Delete rule directly under an alias
+    /// Symbol gone, and a <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> rule directly under an alias
     /// still contributes nothing. The debug tree mirrors the alias's
     /// production behavior so that flattening the debug tree gives exactly
     /// the tree a normal parse returns.
@@ -178,12 +178,12 @@ public sealed class ParseOptions
     /// </summary>
     /// <remarks>
     /// The default appends " at line {lineNumber}, column {tokenColumnNumber}." to
-    /// the author's text. Set it to "{message}" to get the raw <c>.WithError</c>
+    /// the author's text. Set it to "{message}" to get the raw <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">.WithError</see>
     /// string back with no position, or reshape it however you like (position
     /// first, localized, and so on). See <see cref="PositionalErrorTemplate"/> for
     /// the placeholder syntax. The per-template placeholder here is {message}, the
     /// author's text. Unlike the mechanical templates it has no {character},
-    /// since a WithError failure can sit at end of input where there's no
+    /// since a <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">WithError</see> failure can sit at end of input where there's no
     /// character to name.
     /// </remarks>
     public string WithErrorTemplate
@@ -224,7 +224,7 @@ public sealed class ParseOptions
     /// in an editor: an emoji or a combining sequence earlier on the line counts
     /// as one column, not as its several UTF-16 code units. Use {charColumnNumber}
     /// (or {charColumn}) instead for a Language Server Protocol client or editor,
-    /// which count columns in chars. The ParseResult fields stay zero-based. Only
+    /// which count columns in chars. The <see cref="InductorParser.ParseResult">ParseResult</see> fields stay zero-based. Only
     /// the *Number placeholders are shifted.
     /// plus a per-template placeholder for the unit-specific value:
     /// <code>

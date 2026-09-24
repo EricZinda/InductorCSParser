@@ -21,7 +21,7 @@ internal enum HostGlobalizationStatus
 
     /// <summary>
     /// Invariant globalization: string.Normalize returns its input
-    /// unchanged and IsNormalized always reports true.
+    /// unchanged and <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">IsNormalized</see> always reports true.
     /// </summary>
     Invariant,
 
@@ -47,8 +47,8 @@ internal enum HostGlobalizationStatus
 /// someone else's app inherits whatever that app chose. When the
 /// Runtime implementation is active, <c>UnicodeNormalization</c> calls
 /// <see cref="EnsureRuntimeNormalizationIsTrustworthy"/> before every
-/// runtime-path Normalize or IsNormalized, and the first normalizing
-/// Compile or Parse in an affected process throws an actionable
+/// runtime-path Normalize or <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">IsNormalized</see>, and the first normalizing
+/// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> or Parse in an affected process throws an actionable
 /// <see cref="InvalidOperationException"/> instead of quietly parsing
 /// differently. <see cref="UnicodeEnvironment.AcceptHostGlobalization"/>
 /// is the deliberate opt-out.

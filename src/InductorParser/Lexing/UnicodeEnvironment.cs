@@ -133,7 +133,7 @@ public static class UnicodeEnvironment
     /// and the process is running under invariant globalization (which
     /// makes string.Normalize return its input unchanged) or Windows
     /// NLS (which normalizes from Windows' own data instead of ICU),
-    /// the first normalizing Compile or Parse throws
+    /// the first normalizing <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> or Parse throws
     /// <see cref="InvalidOperationException"/>, because a normalizing
     /// grammar would silently produce different parses than on a
     /// normally configured host. Set this to true at startup, before

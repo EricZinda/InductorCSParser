@@ -1156,6 +1156,20 @@ public class TokenSetTests
     }
 
     [Test]
+    public void InlineWhitespace_is_tab_plus_the_space_separator_category()
+    {
+        // The doc comment's definition: Unicode's White_Space property
+        // (char.IsWhiteSpace) minus the UTS #18 line terminators leaves
+        // TAB plus every Space_Separator (Zs) character, the class regex
+        // engines call horizontal whitespace (\h). The set is built by a
+        // predicate scan, so this locks in that the scan lands on exactly
+        // that set and the doc claim stays true.
+        AssertEqual(
+            TokenSet.InlineWhitespace,
+            TokenSet.Single('\t') | TokenSet.Category(UnicodeCategory.SpaceSeparator));
+    }
+
+    [Test]
     public void AnyWhitespace_contains_inline_whitespace_and_line_terminators()
     {
         // The full-Unicode "regex \s" set: every rune that's intra-line

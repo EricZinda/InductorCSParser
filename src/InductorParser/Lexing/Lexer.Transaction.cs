@@ -59,7 +59,7 @@ public sealed partial class Lexer
 
         /// <summary>
         /// The lexer position at the moment this transaction opened. Rules
-        /// pass this to RecordFailure as the pre-read offset where the
+        /// pass this to <see cref="InductorParser.Lexing.Lexer.RecordFailure(System.Int32,System.String,System.Boolean)">RecordFailure</see> as the pre-read offset where the
         /// offending input starts.
         /// </summary>
         public int StartPosition => _savedPosition;
@@ -83,9 +83,9 @@ public sealed partial class Lexer
         /// commit and rollback. A rejected Or branch or a count rule's stopped
         /// iteration is real evidence about the input and is kept, ranked by
         /// depth like any other failure. The one exception is lookahead, which
-        /// is what BeginProbe is for: a Probe restores the failure tracker and
+        /// is what <see cref="InductorParser.Lexing.Lexer.BeginProbe">BeginProbe</see> is for: a Probe restores the failure tracker and
         /// subtree-extent mark as well as the position. See
-        /// docs/ErrorArchitecture.md.
+        /// <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>.
         /// </remarks>
         public void Commit()
         {

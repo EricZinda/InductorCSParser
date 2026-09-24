@@ -4,7 +4,7 @@ namespace InductorParser.SyntaxTree;
 
 /// <summary>
 /// A start/end pair of <see cref="SourcePosition"/>s describing a span of source characters.
-/// <see cref="End"/> is one past the last character matched, so End.CharIndex - Start.CharIndex
+/// <see cref="End"/> is one past the last character matched, so <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">End.CharIndex</see> - <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">Start.CharIndex</see>
 /// equals the matched length in chars.
 /// </summary>
 /// <remarks>
@@ -27,7 +27,7 @@ public readonly struct SourceRange
     /// </summary>
     /// <remarks>
     /// Both endpoints must point into the same input text, because <see cref="SubstringOfInput"/>
-    /// indexes <c>Start.Input</c> with <c>End.CharIndex</c>. Positions from the same parse always
+    /// indexes <see cref="InductorParser.SyntaxTree.SourcePosition.Input">Start.Input</see> with <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">End.CharIndex</see>. Positions from the same parse always
     /// do. Two separate string instances with equal content count as the same input too, so
     /// positions built by <see cref="SourcePosition.From"/> over two copies of the same text
     /// also work.
@@ -56,7 +56,7 @@ public readonly struct SourceRange
     /// The substring of <see cref="SourcePosition.Input"/> covered by this range.
     /// </summary>
     /// <remarks>
-    /// Equivalent to Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex), but lets
+    /// Equivalent to <c>Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex)</c>, but lets
     /// the caller skip remembering which string the range came from.
     /// </remarks>
     public string SubstringOfInput() =>
@@ -66,7 +66,7 @@ public readonly struct SourceRange
     /// The full text of the line <see cref="Start"/> falls on, terminator excluded.
     /// </summary>
     /// <remarks>
-    /// Shorthand for <c>Start.SourceLine()</c>. Use it with
+    /// Shorthand for <see cref="InductorParser.SyntaxTree.SourcePosition.SourceLine">Start.SourceLine()</see>. Use it with
     /// <see cref="SourcePosition.CharColumn"/> to draw a compiler-style caret under
     /// this span: the line for context, the column to indent the caret. On a
     /// range that spans more than one line this returns the first line, the one

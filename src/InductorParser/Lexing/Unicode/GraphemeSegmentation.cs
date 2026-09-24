@@ -90,16 +90,16 @@ internal enum GraphemeClusterBreakType
 
 /// <summary>
 /// Computes UAX #29 extended grapheme cluster boundaries
-/// (https://www.unicode.org/reports/tr29/). The built-in state machine
+/// (<a href="https://www.unicode.org/reports/tr29/">Unicode Text Segmentation</a>). The built-in state machine
 /// implements the rule set of Rev. 41
-/// (https://www.unicode.org/reports/tr29/tr29-41.html), the last
+/// (<a href="https://www.unicode.org/reports/tr29/tr29-41.html">UAX #29, Revision 41</a>), the last
 /// edition before GB9c, over Unicode 16.0 break-property data,
 /// deliberately matching .NET 10's StringInfo, which also lacks GB9c
 /// (dotnet/runtime#111546),
 /// and its generated break-property table in
 /// GraphemeSegmentation.Data.cs is the other half of this partial
 /// class. The implementation is chosen by the process-wide setting
-/// surfaced as UnicodeEnvironment.Implementation, which governs the
+/// surfaced as <see cref="InductorParser.Lexing.UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>, which governs the
 /// segmenter and the normalizer together and is resolved and frozen on
 /// the first query (the file header explains the policy).
 /// </summary>
@@ -110,7 +110,7 @@ internal static partial class GraphemeSegmentation
     /// extended grapheme cluster. If the input is
     /// empty, returns 0. The first call resolves and freezes the
     /// process-wide implementation choice
-    /// (UnicodeEnvironment.Implementation): the length comes from the
+    /// (<see cref="InductorParser.Lexing.UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>): the length comes from the
     /// runtime's StringInfo or the built-in state machine below (the
     /// file header explains the policy).
     /// </summary>

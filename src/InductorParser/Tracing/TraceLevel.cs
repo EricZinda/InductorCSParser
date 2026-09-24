@@ -1,14 +1,14 @@
 namespace InductorParser.Tracing;
 
 /// <summary>
-/// Controls how verbose the parser's trace output is when a TraceSink is
+/// Controls how verbose the parser's trace output is when a <see cref="InductorParser.ParseOptions.TraceSink">TraceSink</see> is
 /// wired up on ParseOptions.
 /// </summary>
 /// <remarks>
 /// Names match the TraceDetail enum in the C++ library so captured traces
 /// from either side read the same. Normal and Detailed are placeholders
 /// today: every built-in rule emits its Succ/FAIL line at Diagnostic, as do
-/// Lexer.Read and deepest-failure updates.
+/// <see cref="InductorParser.Lexing.Lexer.Read">Lexer.Read</see> and deepest-failure updates.
 /// </remarks>
 public enum TraceLevel
 {

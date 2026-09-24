@@ -28,7 +28,7 @@ public sealed partial class Lexer
         /// The lexer position at the moment this probe opened.
         /// </summary>
         /// <remarks>
-        /// Rules pass this to RecordFailure as the "pre-read" offset,
+        /// Rules pass this to <see cref="InductorParser.Lexing.Lexer.RecordFailure(System.Int32,System.String,System.Boolean)">RecordFailure</see> as the "pre-read" offset,
         /// the same way <see cref="Transaction.StartPosition"/> is used.
         /// </remarks>
         public int StartPosition => _savedPosition;

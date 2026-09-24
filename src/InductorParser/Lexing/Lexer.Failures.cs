@@ -36,7 +36,7 @@ public sealed partial class Lexer
     /// ended now.
     /// </summary>
     /// <remarks>
-    /// See docs/ErrorArchitecture.md for how forced, named, and mechanical
+    /// See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a> for how forced, named, and mechanical
     /// failures are ranked.
     /// </remarks>
     public int DeepestFailurePosition
@@ -57,7 +57,7 @@ public sealed partial class Lexer
     /// or null if the deepest failure has no message.
     /// </summary>
     /// <remarks>
-    /// See docs/ErrorArchitecture.md.
+    /// See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>.
     /// </remarks>
     public string? DeepestFailureMessage
     {
@@ -74,7 +74,7 @@ public sealed partial class Lexer
 
     /// <summary>
     /// True when the failure <see cref="DeepestFailureMessage"/> would
-    /// surface is a forced <c>WithError</c> override.
+    /// surface is a forced <see cref="Rule.WithError"/> override.
     /// </summary>
     public bool DeepestFailureIsForced => _failureState.ForcedMessage != null;
 
@@ -84,12 +84,12 @@ public sealed partial class Lexer
     /// <remarks>
     /// Precedence: forced beats everything, otherwise the deepest position
     /// wins. At the same position named beats mechanical and ties go to
-    /// the first writer. See docs/ErrorArchitecture.md.
+    /// the first writer. See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>.
     /// </remarks>
     /// <param name="position">The start of the specific read that failed, not the post-read lexer position.</param>
     /// <param name="errorMessage">The named message to attach,
     /// or null for a mechanical failure.</param>
-    /// <param name="forced">True for a forced <c>WithError</c> override
+    /// <param name="forced">True for a forced <see cref="Rule.WithError"/> override
     /// that beats every non-forced failure regardless of depth.</param>
     public void RecordFailure(int position, string? errorMessage = null, bool forced = false)
     {
@@ -159,18 +159,18 @@ public sealed partial class Lexer
     }
 
     /// <summary>
-    /// Record a composite rule's <c>.WithError</c> failure at whichever is
+    /// Record a composite rule's <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">.WithError</see> failure at whichever is
     /// further into the input: <paramref name="floorPosition"/> or the
     /// deepest position any child of the composite reached.
     /// </summary>
     /// <remarks>
-    /// See docs/ErrorArchitecture.md for why a composite records this way.
+    /// See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a> for why a composite records this way.
     /// </remarks>
     /// <param name="floorPosition">Where the composite would record on its
     /// own, usually its start position or the current lexer position.</param>
     /// <param name="errorMessage">The named or forced message to attach,
     /// or null for a mechanical failure.</param>
-    /// <param name="forced">True for a forced <c>WithError</c> override.</param>
+    /// <param name="forced">True for a forced <see cref="Rule.WithError"/> override.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RecordCompositeFailure(int floorPosition, string? errorMessage, bool forced)
         => RecordFailure(Math.Max(_subtreeDeepestFailure, floorPosition), errorMessage, forced);

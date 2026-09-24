@@ -12,7 +12,7 @@ namespace InductorParser.Lexing;
 /// </summary>
 /// <remarks>
 /// This is the rune layer. Its grapheme-cluster counterpart is
-/// <c>GraphemeHelpers</c>. The two stay separate because runes and UAX #29
+/// <see cref="GraphemeHelpers"/>. The two stay separate because runes and UAX #29
 /// clusters are different units, and the lexer's rune-mode / grapheme-mode
 /// split rests on keeping them apart.
 /// </remarks>
@@ -35,7 +35,7 @@ public static class RuneHelpers
     /// <summary>
     /// Span overload of
     /// <see cref="IsSurrogatePairAt(string, int)"/> with the same semantics.
-    /// It exists so span callers don't pay an <c>.AsSpan()</c> round-trip on
+    /// It exists so span callers don't pay an <see cref="System.MemoryExtensions.AsSpan(string)">.AsSpan()</see> round-trip on
     /// what they already have.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -120,7 +120,7 @@ public static class RuneHelpers
     /// Span overload of <see cref="TrySingleRune(string, out int)"/>. Same
     /// rule: true for one non-surrogate char or one surrogate pair, false for a
     /// lone surrogate or a multi-rune span. Exists so span callers don't pay an
-    /// <c>.AsSpan()</c> round-trip on what they already have.
+    /// <see cref="System.MemoryExtensions.AsSpan(string)">.AsSpan()</see> round-trip on what they already have.
     /// </summary>
     public static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)
     {
