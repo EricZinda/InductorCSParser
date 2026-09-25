@@ -77,7 +77,7 @@ public sealed class Symbol
     public SymbolId Id { get; }
 
     /// <summary>
-    /// How this Symbol participates when the tree is flattened: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> drops it, Flatten lifts
+    /// How this Symbol participates when the tree is flattened: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> drops it, <see cref="FlattenType.Flatten">Flatten</see> lifts
     /// its children into the parent, <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> keeps it as a node.
     /// </summary>
     public FlattenType FlattenType { get; }
@@ -394,7 +394,7 @@ public sealed class Symbol
 
     /// <summary>
     /// Appends this Symbol's flattened contribution to <paramref name="result"/>: nothing for
-    /// <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>, the lifted children for Flatten, and a rebuilt node (or this Symbol unchanged) for
+    /// <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>, the lifted children for <see cref="FlattenType.Flatten">Flatten</see>, and a rebuilt node (or this Symbol unchanged) for
     /// Preserve.
     /// </summary>
     /// <remarks>
@@ -441,7 +441,7 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Returns a flattened copy of this subtree: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> nodes dropped and Flatten nodes' children
+    /// Returns a flattened copy of this subtree: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> nodes dropped and <see cref="FlattenType.Flatten">Flatten</see> nodes' children
     /// lifted into their parents. See <see cref="FlattenInto"/>.
     /// </summary>
     /// <remarks>

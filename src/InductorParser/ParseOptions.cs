@@ -6,9 +6,9 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 /// <summary>
-/// Options for a single Parse call: trace output, the resource budgets (rule
+/// This is how you set options for a single Parse call, things like: trace output, the resource budgets (rule
 /// count, recursion depth, wall-clock timeout), external cancellation,
-/// output-tree shape, and the templates for the parser's default error
+/// output-tree shape, and alternative templates for the parser's default error
 /// messages.
 /// </summary>
 /// <remarks>

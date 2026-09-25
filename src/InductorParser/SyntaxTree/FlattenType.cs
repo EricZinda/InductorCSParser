@@ -46,7 +46,7 @@ public enum FlattenType
     /// <para>
     /// On a leaf, <see cref="Flatten"/> and <see cref="Preserve"/> behave identically: the leaf
     /// surfaces in the parent's children list with its own Id and matched text either way. A
-    /// leaf has no children for Flatten to lift past, so the FlattenType tag has no effect on a
+    /// leaf has no children for <see cref="Flatten">Flatten</see> to lift past, so the FlattenType tag has no effect on a
     /// leaf Symbol in the tree.
     /// </para>
     /// </remarks>

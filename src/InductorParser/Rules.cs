@@ -5,16 +5,15 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 /// <summary>
-/// The main class for building grammars. Every built-in rule
-/// type has a corresponding factory method here, so grammar code
+/// This is the main class for building grammars. Every built-in rule
+/// type has a factory method here and most of the classes themselves are internal. Thus, grammar code
 /// composes rules by calling these functions instead of
 /// instantiating rule classes directly.
 /// </summary>
 /// <remarks>
-/// The idiomatic usage is <c><see cref="Rules">using static InductorParser.Rules;</see></c>
-/// at the top of a grammar file, which drops the class prefix and
-/// lets a grammar read close to the shape you'd write on a
-/// whiteboard:
+/// The idiomatic usage is to put <c><see cref="Rules">using static InductorParser.Rules;</see></c>
+/// at the top of a grammar file, which allows the rule factory calls to drop the class prefix. This makes a grammar 
+/// read close to the way you'd write it on a whiteboard:
 /// <code>
 /// var expression = And(
 ///     Identifier(),
@@ -25,20 +24,21 @@ namespace InductorParser;
 /// );
 /// </code>
 /// Most of the factory methods just forward their arguments to the matching rule
-/// constructor. A few factories
-/// compose several rules instead of forwarding to a single rule type,
-/// because every grammar ends up wanting them.
+/// class constructor. A few factories
+/// compose several rules instead of forwarding to a single rule type. This is a convenience since
+/// many grammars end up wanting them.
 ///
 /// Every rule has a default <see cref="FlattenType"/> that
-/// controls how the match contributes to the parse tree: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>
-/// drops the node, Flatten lifts its children into the parent,
-/// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> keeps the rule's Symbol. Each factory's summary names its
-/// default. Override this on any rule by using
+/// controls how it contributes to the parse tree when it matches: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>
+/// drops the node, <see cref="FlattenType.Flatten">Flatten</see> lifts its children into the parent,
+/// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> keeps the rule's Symbol. Each factory's summary lists its
+/// default. You can override it on any rule by using
 /// <see cref="Rule.Flatten(FlattenType)"/> to change it for a
 /// specific use.
 ///
-/// Two fluent modifiers on <see cref="Rule"/> show up in almost
-/// every grammar:
+/// A fluent modifier configures a rule and returns that same rule, so
+/// you can chain several calls in one expression. Two such modifiers on
+/// <see cref="Rule"/> show up in almost every grammar:
 /// <list type="bullet">
 /// <item><description>
 /// <see cref="Rule.As(string)"/> (or <see cref="Rule.As(SymbolId)"/>)
@@ -52,7 +52,14 @@ namespace InductorParser;
 /// failed, in place of the generic "unexpected 'x'".
 /// </description></item>
 /// </list>
-/// Both return the same rule, so they chain.
+/// For example, create an identifier rule, name it, and attach an error message:
+/// <code>
+/// var variableName = Identifier()
+///     .As("variableName")
+///     .WithError("Expected a variable name");
+/// </code>
+/// Each call configures the rule returned by the previous call. The final
+/// result is one rule that you can use inside a larger grammar.
 /// </remarks>
 public static class Rules
 {
