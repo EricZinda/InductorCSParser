@@ -68,7 +68,7 @@ public sealed class ParseOptions
     /// <remarks>
     /// Be careful when disabling. With no depth limit, deeply
     /// nested input recurses until the .NET call stack runs out and the runtime
-    /// throws StackOverflowException. That exception can't be caught. It never
+    /// throws StackOverflowException. That exception can't be caught and thus it never
     /// surfaces as a failed <see cref="ParseResult"/>. It terminates the whole
     /// process on the spot. A handful of kilobytes of nested brackets is  enough to
     /// trigger it (the same shape as CVE-2026-40324 and similar
@@ -117,7 +117,7 @@ public sealed class ParseOptions
 
     /// <summary>
     /// When true, the parser ignores the flatten settings of the rules and
-    /// Parse returns a tree whose shape matches the grammar
+    /// Parse returns a tree that matches the grammar
     /// one-to-one: every <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see> Symbol, every <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>
     /// node, and every individual leaf symbol is present exactly where the
     /// grammar placed it. Alias subtrees are the one exception, described
@@ -201,22 +201,21 @@ public sealed class ParseOptions
     /// Change this template to localize the message or use your app's preferred position format.
     /// </summary>
     /// <remarks>
-    /// Templates can include named placeholders the parser substitutes when it
+    /// Templates can include named placeholders that get replaced with values when the parser
     /// builds the message. Placeholders are written as {name}. Unknown
     /// placeholders pass through verbatim, so a typo shows up in the output
     /// rather than throwing.
     /// <para>
     /// Every template (this one and the abort templates below) supports the
     /// same position placeholders, named to match the ParseResult.ErrorXxx
-    /// properties so a template author can mirror whatever unit the rest of
-    /// their code already uses:
+    /// properties so a template author can use the unit they choose:
     /// <code>
     ///   {charIndex}          ParseResult.ErrorCharIndex   (UTF-16 code units)
     ///   {tokenIndex}         ParseResult.ErrorTokenIndex  (grapheme clusters)
-    ///   {line}               ParseResult.ErrorLine        (zero-based, Language Server Protocol convention)
+    ///   {line}               ParseResult.ErrorLine        (zero-based line, Language Server Protocol convention)
+    ///   {lineNumber}         ErrorLine + 1                (one-based line)
     ///   {charColumn}         ParseResult.ErrorCharColumn  (zero-based char column)
     ///   {tokenColumn}        ParseResult.ErrorTokenColumn (zero-based grapheme column)
-    ///   {lineNumber}         ErrorLine + 1                (one-based line)
     ///   {charColumnNumber}   ErrorCharColumn + 1          (one-based char column)
     ///   {tokenColumnNumber}  ErrorTokenColumn + 1         (one-based grapheme column)
     /// </code>
@@ -225,8 +224,7 @@ public sealed class ParseOptions
     /// in an editor: an emoji or a combining sequence earlier on the line counts
     /// as one column, not as its several UTF-16 code units. Use {charColumnNumber}
     /// (or {charColumn}) instead for a Language Server Protocol client or editor,
-    /// which count columns in chars. The <see cref="InductorParser.ParseResult">ParseResult</see> fields stay zero-based. Only
-    /// the *Number placeholders are shifted.
+    /// which count columns in chars.
     /// </para>
     /// <para>
     /// Each template also has one placeholder of its own for the
@@ -239,16 +237,6 @@ public sealed class ParseOptions
     ///   RuleCountLimitAbortTemplate  {limit}      (options.RuleCountLimit)
     ///   DepthLimitAbortTemplate      {limit}      (options.MaxDepth)
     /// </code>
-    /// </para>
-    /// <para>
-    /// The token-index, line/column, and token-column conversions each walk the
-    /// input once, so they're computed lazily and only paid for when the
-    /// corresponding placeholder appears in the template. The default templates
-    /// use {lineNumber} and {tokenColumnNumber}, so building a default failure
-    /// message pays one line scan plus one grapheme-cluster count of the input.
-    /// That runs only on the failure path (a successful parse builds no message).
-    /// A caller who wants the message built with no scan at all can set the
-    /// templates to a {charIndex}-only string.
     /// </para>
     /// </remarks>
     public string PositionalErrorTemplate
