@@ -26,7 +26,10 @@ public sealed class ParseOptions
     /// </summary>
     public TextWriter? TraceSink { get; set; }
 
-    /// <summary>How verbose the trace output is.</summary>
+    /// <summary>
+    /// How verbose the trace output is. See <see cref="InductorParser.Tracing.TraceLevel"/>
+    /// for a description of each level.
+    /// </summary>
     public TraceLevel TraceLevel { get; set; } = TraceLevel.Diagnostic;
 
     /// <summary>
@@ -36,24 +39,22 @@ public sealed class ParseOptions
     /// limit. Set to 0 to disable.
     /// </summary>
     /// <remarks>
-    /// Each rule invocation counts as one unit, and each iteration of a
+    /// Each rule invocation counts as one unit, as does each iteration of a
     /// bulk-scan inner loop (<see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>, the AdvanceWhile*
-    /// primitives, or any rule that calls <see cref="InductorParser.Lexing.Lexer.TickBudget">Lexer.TickBudget</see>) counts as one
-    /// too. Because it's a count and not a wall-clock measurement, the same input
+    /// primitives, or any rule that calls <see cref="InductorParser.Lexing.Lexer.TickBudget">Lexer.TickBudget</see>). Because it's a count and not a wall-clock measurement, the same input
     /// against the same grammar trips at the same point on every run. The
     /// default of 10,000,000 lets well-formed parses through (a 1 MB file
     /// often runs through low millions) and catches both
     /// catastrophic-backtracking shapes and bulk-scan denial of service.
     /// <para>
-    /// The limit is checked at periodic checkpoints (every 1024 work units),
+    /// Treat this as a backstop
+    /// against runaway parses, not a precise budget. Here's why: the limit is checked at periodic checkpoints (every 1024 work units),
     /// not on every unit, which keeps the per-unit cost at one mask and one
-    /// compare. An abort lands at the first checkpoint after
+    /// compare. The abort happens at the first checkpoint after
     /// the counter crosses the limit, so the parse can run up to 1023 units
-    /// past it. And a parse that finishes before the first checkpoint never
+    /// past it. A parse that finishes before the first checkpoint never
     /// aborts at all, no matter how small the limit, so a limit below 1024
-    /// can't make a small parse fail. The checkpoint schedule is fixed, so
-    /// the run-to-run determinism above still holds. Treat this as a backstop
-    /// against runaway parses, not a precise budget.
+    /// can't make a small parse fail.
     /// </para>
     /// </remarks>
     public long RuleCountLimit { get; set; } = 10_000_000L;
@@ -169,15 +170,17 @@ public sealed class ParseOptions
         "{message} at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
     /// Template that wraps a rule's <c><see cref="Rule.WithError">.WithError("...")</see></c> message when that
-    /// rule is the deepest failure. The author's text fills the {message}
-    /// placeholder, and the position placeholders every template shares add the
-    /// location, so a custom message includes its position the way the mechanical
-    /// default does. Setting it to null throws.
+    /// rule is the deepest failure. The parser replaces <c>{message}</c> with
+    /// the text passed to <see cref="Rule.WithError"/>. Setting it to null throws.
     /// A built-in English default adds the error location to the rule's message.
     /// Change this template to localize that added text, rearrange the location,
     /// or show only the rule's message.
     /// </summary>
     /// <remarks>
+    /// For example, <c><see cref="Rule.WithError">.WithError("Expected a number")</see></c>
+    /// with the default template produces "Expected a number at line 2, column 5."
+    /// if the error is at that location.
+    /// <para>
     /// The default appends " at line {lineNumber}, column {tokenColumnNumber}." to
     /// the author's text. Set it to "{message}" to get the raw <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">.WithError</see>
     /// string back with no position, or reshape it however you like (position
@@ -186,6 +189,7 @@ public sealed class ParseOptions
     /// author's text. Unlike the mechanical templates it has no {character},
     /// since a <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">WithError</see> failure can sit at end of input where there's no
     /// character to name.
+    /// </para>
     /// </remarks>
     public string WithErrorTemplate
     {
