@@ -283,8 +283,8 @@ public sealed class ParseOptions
     /// </summary>
     /// <remarks>
     /// Two kinds of input trigger it: an unpaired UTF-16 surrogate (which is
-    /// ill-formed UTF-16), and U+FFFE (a noncharacter that .NET's string.Normalize
-    /// throws upon finding, and the parser rejects the same way on every runtime). The
+    /// ill-formed UTF-16), and U+FFFE (which is a noncharacter that .NET's string.Normalize
+    /// throws upon finding. Note that this parser rejects it the same way on every runtime). The
     /// parse returns <see cref="ParseOutcome.MalformedInput"/> with this
     /// message instead of letting string.Normalize throw an ArgumentException
     /// whose text the app can't control.
