@@ -171,6 +171,9 @@ public sealed class ParseOptions
     /// placeholder, and the position placeholders every template shares add the
     /// location, so a custom message includes its position the way the mechanical
     /// default does. Setting it to null throws.
+    /// A built-in English default adds the error location to the rule's message.
+    /// Change this template to localize that added text, rearrange the location,
+    /// or show only the rule's message.
     /// </summary>
     /// <remarks>
     /// The default appends " at line {lineNumber}, column {tokenColumnNumber}." to
@@ -194,6 +197,8 @@ public sealed class ParseOptions
     /// Template for the default message when the parser rejects a specific
     /// input character and no .WithError("...") was attached at the deepest
     /// failure position. Setting it to null throws.
+    /// A built-in English default reports the unexpected character and its location.
+    /// Change this template to localize the message or use your app's preferred position format.
     /// </summary>
     /// <remarks>
     /// Templates can include named placeholders the parser substitutes when it
@@ -259,6 +264,8 @@ public sealed class ParseOptions
     /// and no .WithError("...") was attached. See
     /// <see cref="PositionalErrorTemplate"/> for the placeholder syntax.
     /// Setting it to null throws.
+    /// A built-in English default reports unexpected end of input and its location.
+    /// Change this template to localize the message or explain that more input was expected.
     /// </summary>
     public string EndOfInputErrorTemplate
     {
@@ -271,11 +278,13 @@ public sealed class ParseOptions
     /// <summary>
     /// Template for the message when the input can't be normalized to the
     /// grammar's normalization form. Setting it to null throws.
+    /// A built-in English default identifies the offending character and its location.
+    /// Change this template to localize the message or explain invalid text in terms your users understand.
     /// </summary>
     /// <remarks>
     /// Two kinds of input trigger it: an unpaired UTF-16 surrogate (which is
-    /// ill-formed UTF-16), and U+FFFE (a noncharacter .NET's string.Normalize
-    /// rejects, and the parser rejects the same way on every runtime). The
+    /// ill-formed UTF-16), and U+FFFE (a noncharacter that .NET's string.Normalize
+    /// throws upon finding, and the parser rejects the same way on every runtime). The
     /// parse returns <see cref="ParseOutcome.MalformedInput"/> with this
     /// message instead of letting string.Normalize throw an ArgumentException
     /// whose text the app can't control.
@@ -297,6 +306,8 @@ public sealed class ParseOptions
     /// Template for the default message when <see cref="Timeout"/> aborts the
     /// parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
     /// syntax. Setting it to null throws.
+    /// Defaults to "Parse aborted: timeout exceeded." Change this template to
+    /// localize the message or include the configured duration with {timeout}.
     /// </summary>
     public string TimeoutAbortTemplate
     {
@@ -309,6 +320,8 @@ public sealed class ParseOptions
     /// Template for the default message when <see cref="RuleCountLimit"/> aborts
     /// the parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
     /// syntax. Setting it to null throws.
+    /// Defaults to "Parse aborted: rule-count limit exceeded." Change this template
+    /// to explain the processing limit to your users or include its value with {limit}.
     /// </summary>
     public string RuleCountLimitAbortTemplate
     {
@@ -321,6 +334,8 @@ public sealed class ParseOptions
     /// Template for the default message when <see cref="MaxDepth"/> aborts the
     /// parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
     /// syntax. Setting it to null throws.
+    /// Defaults to "Parse aborted: maximum recursion depth exceeded." Change this
+    /// template to describe excessive nesting in your grammar's terms or include {limit}.
     /// </summary>
     public string DepthLimitAbortTemplate
     {
@@ -333,6 +348,8 @@ public sealed class ParseOptions
     /// Template for the default message when <see cref="Cancellation"/> aborts
     /// the parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
     /// syntax. Setting it to null throws.
+    /// Defaults to "Parse aborted: cancellation requested." Change this template
+    /// to localize the message or use your app's usual cancellation wording.
     /// </summary>
     public string CancellationAbortTemplate
     {
