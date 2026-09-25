@@ -12,7 +12,8 @@ namespace InductorParser;
 /// messages.
 /// </summary>
 /// <remarks>
-/// Unicode normalization form is a grammar-level decision committed at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>
+/// <a href="../docs/Primer3.md#compatibility-vs-canonical">Unicode normalization form</a>
+/// is a grammar-level decision committed at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>
 /// time, not a parse option. Call rule.Compile() with a Normalization form (or
 /// null to disable normalization) before parsing if you want a form other 
 /// than the FormC default. See <see cref="Rule.Compile(System.Text.NormalizationForm?)"/>.
@@ -150,10 +151,9 @@ public sealed class ParseOptions
     /// <remarks>
     /// The default (false) requires every token of the input to be consumed by
     /// the grammar before Parse returns success: trailing characters that the grammar
-    /// didn't match turns the parse into a failure positioned at the first
+    /// didn't match turn the parse into a failure positioned at the first
     /// unconsumed token. The default is strict because silently accepting
-    /// trailing input would mask the "grammar accepted something it
-    /// shouldn't have" bugs grammar authors care most about catching.
+    /// trailing input is usually a bug that grammar authors want to catch.
     /// <para>
     /// Turn this on for prefix parsing: matching one record at the front of a
     /// longer stream, testing a sub-rule against an input longer than the rule
