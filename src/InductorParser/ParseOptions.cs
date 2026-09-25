@@ -126,20 +126,22 @@ public sealed class ParseOptions
     /// <remarks>
     /// Turn this on to debug or inspect a grammar, to <see cref="InductorParser.ParseResult.PrintTree">PrintTree</see> the full
     /// structure, or to Find(rule) against Symbols that the default path would
-    /// lift out. When off (the default) the parser applies each rule's FlattenType before
+    /// remove. When off (the default) the parser applies each rule's FlattenType before
     /// returning so that <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> nodes are gone, <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>
     /// Symbols have their children lifted into the parent, and
     /// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> Symbols remain as findable nodes. That's the shape
     /// most callers actually want to walk (i.e. what the grammar was designed for).
     /// This setting is for debugging.
     /// <para>
-    /// The alias exception: an alias substitutes its identity for its inner's
-    /// even here, exactly as it does in the production tree. An alias over a
-    /// named rule shows the match under the alias's id with the inner's own
-    /// Symbol gone, and a <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> rule directly under an alias
-    /// still contributes nothing. The debug tree mirrors the alias's
-    /// production behavior so that flattening the debug tree gives exactly
-    /// the tree a normal parse returns.
+    /// Named aliases usually replace the node for the rule they wrap, even
+    /// when this option is enabled. For example, if a rule named "digits"
+    /// is wrapped in an <see cref="Rules.Alias"/> named "year", the tree
+    /// contains a "year" node, with no separate "digits" node underneath it.
+    /// A wrapped rule with <see cref="SyntaxTree.FlattenType.Delete"/> is
+    /// different: this option keeps its node and content underneath the alias,
+    /// marked for deletion. Calling <see cref="SyntaxTree.Symbol.Flatten"/>
+    /// on the debug tree then removes that node and its content, leaving the
+    /// empty alias node that a normal parse would produce.
     /// </para>
     /// </remarks>
     public bool PreserveAllSymbols { get; set; } = false;
