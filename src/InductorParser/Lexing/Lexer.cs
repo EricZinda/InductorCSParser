@@ -8,43 +8,48 @@ using InductorParser.Tracing;
 namespace InductorParser.Lexing;
 
 /// <summary>
-/// Tokenizes a string one grapheme cluster at a time.
+/// Tokenizes a string one grapheme cluster at a time. A grapheme cluster is one character as a
+/// person sees it, which can be more than one Unicode code point: a base letter plus its accent,
+/// a flag emoji, a family emoji joined with zero-width joiners. The boundaries follow the
+/// <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> rules, and
+/// <a href="../docs/Terminology.md">Terminology</a> explains how a token, a rune, and a char relate in
+/// this library. Each <see cref="Read">Lexer.Read()</see> hands back one cluster as a <see cref="Token"/>.
+/// <para>
+/// There's also a one-rune-per-token mode, selected by the
+/// <see cref="Lexer(string, bool)">Lexer(string, bool)</see> constructor, in which Read walks one rune
+/// at a time instead. The built-in
+/// <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see> uses it, and
+/// so can a user-defined Rule that needs to run an inner rule against the runes inside a single
+/// token: build a lexer this way over a substring holding just that token's text, and the inner
+/// rule sees each rune of the outer token as its own token.
+/// </para>
 /// </summary>
 /// <remarks>
+/// Malformed UTF-16: stray surrogates (a high surrogate without a paired low, or a low surrogate
+/// in any position) never crash the lexer. They're tokenized like any other content and never
+/// throw, so most grammars need to do nothing about them. They won't accidentally match rules
+/// that specify literals, and rules that match any text, like
+/// <see cref="Rules.AnyToken">Rules.AnyToken</see>, consume them safely.
 /// <para>
-/// Cluster boundaries come from the GraphemeClusterIndex on the input string. One
-/// sub-lexer mode, selected by the public Lexer(string, bool oneRunePerToken)
-/// constructor, walks one rune per token instead. The built-in <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see> uses
-/// it, and so can a user-defined Rule that needs to run an inner rule against the
-/// runes inside a single token. The sub-lexer lexes a substring holding just that
-/// token's text, so the inner rule sees each rune of the outer token as its own
-/// token.
+/// That tolerance applies to a grammar compiled without normalization,
+/// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null). A normalizing
+/// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (FormC/FormD/FormKC/FormKD)
+/// runs <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> over the whole
+/// input before the lexer sees it, and <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
+/// rejects any lone surrogate, bare or fused with a following combining mark. Parse catches that
+/// and returns a <see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see>
+/// <see cref="InductorParser.ParseResult">ParseResult</see>, so under a normalizing grammar malformed
+/// input never reaches the lexer at all. A grammar that has to accept malformed UTF-16 should use
+/// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null).
 /// </para>
 /// <para>
-/// Malformed UTF-16: stray surrogates (a high surrogate without a paired low,
-/// or a low surrogate in any position) never crash the lexer. They're
-/// tokenized like any other content and never throw, so most grammars need to
-/// do nothing about them. They won't accidentally match rules that specify literals
-/// and they will be consumed safely by rules that match "anytext" like <see cref="Rules.AnyToken">Rules.AnyToken</see>.
-///
-/// One caveat: that tolerance is the unnormalized <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (<see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null)) story.
-/// A normalizing <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (FormC/FormD/FormKC/FormKD) runs <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> over
-/// the whole input before the lexer ever sees it, and <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> rejects
-/// any lone surrogate, bare or fused with a following combining mark. Parse
-/// catches that and returns a <see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see> <see cref="InductorParser.ParseResult">ParseResult</see>, so under a normalizing
-/// grammar malformed input never reaches the lexer at all. A grammar that has to
-/// accept malformed UTF-16 stays on <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null).
-///
-/// If you
-/// want to detect or reject malformed input, <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> with no normalization and
-/// do it at the rune level:
-/// TryPeekRune returns false on a stray, and rules that decode runes
-/// (LiteralRule, <see cref="InductorParser.TokenSet">TokenSet</see> membership, etc.) already handle that. One gotcha if
-/// you hand-write a Rule that inspects token lengths: a stray isn't always one
-/// char. In rune mode it is, but in grapheme mode a stray plus a
-/// following combining mark is one two-char token, per the <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
-/// grapheme rules
-/// (<a href="https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules">Grapheme Cluster Boundary Rules</a>).
+/// To detect or reject malformed input in your own rule, compile without normalization and check
+/// at the rune level: <see cref="TryPeekRune">Lexer.TryPeekRune</see> returns false on a stray
+/// surrogate, and the built-in rules that decode runes (Literal, OneOf, and the other
+/// <see cref="InductorParser.TokenSet">TokenSet</see>-based rules) already treat a stray as a non-match.
+/// One thing to watch if your rule looks at a token's length: a stray isn't always one char. In
+/// one-rune-per-token mode it is, but in grapheme mode a stray followed by a combining mark is one
+/// two-char token under the <a href="https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules">UAX #29 boundary rules</a>.
 /// Read consumes the whole token either way.
 /// </para>
 /// </remarks>
@@ -102,7 +107,10 @@ public sealed partial class Lexer
 
     private int _position;
 
-    /// <summary>The current read cursor as a UTF-16 offset into <see cref="Input">Lexer.Input</see>.</summary>
+    /// <summary>
+    /// The current read cursor, as a char index (a UTF-16 code unit offset) into
+    /// <see cref="Input">Lexer.Input</see>.
+    /// </summary>
     public int Position => _position;
 
     // Exclusive upper bound on _position. Defaults to _input.Length. The
@@ -383,11 +391,20 @@ public sealed partial class Lexer
         return GraphemeIndex.LengthAt(startOffset);
     }
 
-    // "How long is the next token at this position?" without advancing.
-    // Returns 0 if `position` is at or past the end. Throws when the
-    // position is negative or sits inside a token, matching the boundary
-    // rules SetPosition enforces. See the class doc for the full
-    // malformed-UTF-16 rules.
+    /// <summary>
+    /// The length in chars of the token that starts at <paramref name="position"/>, without
+    /// advancing the cursor. Returns 0 when <paramref name="position"/> is at or past the end of
+    /// the input. For a rule that walks token boundaries itself, this is how to step from one
+    /// boundary to the next without calling <see cref="Read">Lexer.Read()</see>.
+    /// </summary>
+    /// <param name="position">A token boundary: 0, the end of the input, or a position a previous call
+    /// or <see cref="Read">Lexer.Read()</see> landed on.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="position"/> is negative.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="position"/> sits inside a token (inside a grapheme cluster, or inside a
+    /// surrogate pair in one-rune-per-token mode), the same boundary rule
+    /// <see cref="SetPosition">Lexer.SetPosition(int)</see> enforces.
+    /// </exception>
     public int PeekTokenLength(int position)
     {
         if (position < 0)
@@ -404,13 +421,22 @@ public sealed partial class Lexer
         return NextTokenLength(position);
     }
 
-    // Decode the rune at `pos` in `input` without advancing any lexer state.
-    // Writes the rune value and its UTF-16 length. Returns false on a stray
-    // surrogate (see the class doc for the malformed-UTF-16 rules).
-    //
-    // `pos` must be a valid index (0 <= pos < input.Length). The false return
-    // is reserved for "stray surrogate" so callers don't have to distinguish
-    // EOF from malformed input off one bool. Callers check EOF themselves.
+    /// <summary>
+    /// Decodes the rune at <paramref name="pos"/> in <paramref name="input"/> without touching any
+    /// lexer state. Returns true with the rune's code point and its length in chars (1, or 2 for a
+    /// surrogate pair). Returns false when the char at <paramref name="pos"/> is a stray surrogate,
+    /// which is how a rule detects malformed UTF-16 under a grammar compiled without normalization
+    /// (see the class remarks).
+    /// </summary>
+    /// <param name="input">The string to read from.</param>
+    /// <param name="pos">A char index in <paramref name="input"/>, from 0 up to but not including its length.</param>
+    /// <param name="runeValue">The decoded code point, or -1 when the method returns false.</param>
+    /// <param name="runeLen">The number of chars the rune occupies (1, or 2 for a surrogate pair), or 0 when the method returns false.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="input"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pos"/> is outside <paramref name="input"/>.</exception>
+    // The false return is reserved for "stray surrogate" so callers don't have
+    // to distinguish EOF from malformed input off one bool. Callers check EOF
+    // themselves, which is why pos must be in range rather than returning false at the end.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
     {

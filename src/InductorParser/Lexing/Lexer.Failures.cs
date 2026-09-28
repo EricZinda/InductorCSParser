@@ -32,8 +32,8 @@ public sealed partial class Lexer
     private int _subtreeDeepestFailure;
 
     /// <summary>
-    /// The position of the failure that would be reported if the parse
-    /// ended now.
+    /// The position of the failure that would be reported if the parse ended now, as a char
+    /// index (a UTF-16 code unit offset) into <see cref="Input">Lexer.Input</see>.
     /// </summary>
     /// <remarks>
     /// See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a> for how forced, named, and mechanical
