@@ -14,9 +14,11 @@ namespace InductorParser;
 /// The base class of every rule in a grammar. To build a grammar, start at <see cref="Rules"/>:
 /// its factory methods (<see cref="Rules.And">Rules.And</see>, <see cref="Rules.Or">Rules.Or</see>,
 /// <see cref="Rules.Token(char)">Rules.Token</see>, and the rest) return ready-made Rule instances, and
-/// you never need to use Rule directly unless you're writing a custom rule by subclassing it. What
-/// you do call on those instances, <see cref="Rule.Parse(string)">Rule.Parse</see> and the modifiers
-/// like <see cref="Rule.As(string)">Rule.As</see> and <see cref="Rule.WithError(string, bool)">Rule.WithError</see>,
+/// you never need to use Rule directly unless you're writing a custom rule by subclassing it. The
+/// classes behind those instances are internal, so they don't appear in these pages: each one's
+/// documentation is its factory method on <see cref="Rules"/>. What you do call on the instances,
+/// <see cref="Rule.Parse(string)">Rule.Parse</see> and the modifiers like
+/// <see cref="Rule.As(string)">Rule.As</see> and <see cref="Rule.WithError(string, bool)">Rule.WithError</see>,
 /// is documented on this page.
 /// </summary>
 /// <remarks>
@@ -123,7 +125,7 @@ public abstract class Rule
     /// <summary>
     /// The rule's <see cref="SymbolId"/>, the integer identity parse-tree
     /// Symbols store. Assigned at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> time unless set explicitly with
-    /// <see cref="As(SymbolId)">Rule.As(SymbolId)</see>. A single-rune <see cref="Rules.Token(char)">Rules.Token</see>'s id is its code point.
+    /// <see cref="As(SymbolId)">Rule.As(SymbolId)</see>.
     /// </summary>
     public SymbolId Id { get; private set; }
 
@@ -178,8 +180,8 @@ public abstract class Rule
     /// </summary>
     /// <remarks>
     /// Subclasses pass this to <see cref="Lexing.Lexer.RecordFailure">Lexer.RecordFailure</see> on the failure path so
-    /// the depth-primary resolution can surface it: a failure with a message
-    /// is "named", one without is "mechanical". See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>.
+    /// the error ranking can report it. See <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>
+    /// for how failures with and without a message compete.
     /// </remarks>
     protected internal string? ErrorMessage => _errorMessage;
 
@@ -440,7 +442,7 @@ public abstract class Rule
     /// set-once).
     /// </summary>
     /// <remarks>
-    /// Naming a rule only works if its Symbol reaches the parse tree, which
+    /// Naming a rule only matters if its Symbol reaches the parse tree, which
     /// happens under <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>. So, if the flatten policy is anything else, <see cref="Rule.As(string)">Rule.As</see>
     /// tries to change it to <see cref="SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>. However, if the caller already set a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>
     /// policy explicitly via <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(...) / <see cref="Rule.Delete">Rule.Delete</see>() / <see cref="Rule.Flatten()">Rule.Flatten</see>(), <see cref="Rule.As(string)">Rule.As</see> throws
@@ -495,7 +497,7 @@ public abstract class Rule
     /// id was already set.
     /// </summary>
     /// <remarks>
-    /// Setting an id for a rule only works if its Symbol reaches the parse tree, which
+    /// Setting an id for a rule only matters if its Symbol reaches the parse tree, which
     /// happens under <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>. So, if the flatten policy is anything else, <see cref="Rule.As(string)">Rule.As</see>
     /// tries to change it to <see cref="SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>. However, if the caller already set a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>
     /// policy explicitly via <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(...) / <see cref="Rule.Flatten()">Rule.Flatten</see>() / <see cref="Rule.Delete">Rule.Delete</see>(), <see cref="Rule.As(string)">Rule.As</see> throws
@@ -537,8 +539,8 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Wrap this rule in an alias that will have the name specified. This allows for reusing one
-    /// rule shape without a factory function for each.
+    /// Wrap this rule in an alias (see <see cref="Rules.Alias(Rule)">Rules.Alias</see>) that will have the
+    /// name specified. This allows for reusing one rule shape without a factory function for each.
     /// </summary>
     /// <remarks>
     /// <code>
@@ -565,8 +567,8 @@ public abstract class Rule
 
     /// <summary>
     /// Explicit-<see cref="SymbolId"/> variant of
-    /// <see cref="AliasedAs(string)">Rule.AliasedAs(string)</see>: create a fresh alias around this rule, with the
-    /// explicit id on the alias.
+    /// <see cref="AliasedAs(string)">Rule.AliasedAs(string)</see>: create a fresh alias
+    /// (see <see cref="Rules.Alias(Rule)">Rules.Alias</see>) around this rule, with the explicit id on the alias.
     /// </summary>
     public Rule AliasedAs(SymbolId id) => new AliasRule(this).As(id);
 
