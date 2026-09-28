@@ -74,6 +74,16 @@ function walk(node) {
     return;
   }
   if (node.syntax) {
+    // Put the complete callable declaration in its heading, including parameter
+    // names, defaults, modifiers, and generic constraints. Keep the UID/id and
+    // parameter documentation intact so links and descriptions still work.
+    var memberType = String(node.type || "").toLowerCase();
+    if (memberType === "method" || memberType === "constructor" || memberType === "operator") {
+      if (node.syntax.content && node.syntax.content.length) {
+        node.name = node.syntax.content;
+        node.syntax.content = [];
+      }
+    }
     pruneSyntax(node.syntax);
   }
   pruneInheritance(node);
