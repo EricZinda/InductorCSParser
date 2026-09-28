@@ -250,7 +250,7 @@ public readonly struct ParseResult
     /// the grammar that produced this result. Returns null if the id isn't known.
     /// </summary>
     /// <remarks>
-    /// If you named the rule with <see cref="Rule.As(string)">Rule.As("name")</see>, that name is used.
+    /// If you named the rule with <see cref="Rule.As(string)">Rule.As("name")</see>, that name is returned.
     /// Otherwise, a rule for one specific rune uses that rune's text, such as "a".
     /// Otherwise, it uses a default label, such as "Token" or "And", including for a grapheme made of multiple runes.
     /// <para>

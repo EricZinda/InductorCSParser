@@ -915,16 +915,17 @@ public abstract class Rule
     /// hasn't been compiled yet, since ids aren't stable until <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> runs.
     /// </summary>
     /// <remarks>
-    /// If you named the rule with <see cref="Rule.As(string)">Rule.As("name")</see>, that name is used.
+    /// If you named the rule with <see cref="Rule.As(string)">Rule.As("name")</see>, that name is returned.
     /// Otherwise, a rule for one specific rune uses that rune's text, such as "a".
     /// Otherwise, it uses a default label, such as "Token" or "And", including for a grapheme made of multiple runes.
     /// <para>
     /// This is a label for the rule. Use <see cref="Symbol.ToString">Symbol.ToString()</see> to get the text it matched.
     /// </para>
     /// <para>
-    /// Intended for parse-tree walkers (which see Symbols with SymbolIds,
-    /// not Rule references) and for error-message rendering that wants to quote
-    /// a rule's name. Tracing has direct Rule access and doesn't need this path.
+    /// This exists for code that walks a parse tree. A Symbol stores the <see cref="SymbolId"/> of
+    /// the rule that produced it, not a reference to the rule, so an id is all a walker has to look
+    /// a name up with. <see cref="Symbol.DisplayName">Symbol.DisplayName</see> calls this for you on a
+    /// Symbol from a parse. Error-message rendering that wants to quote a rule's name uses it too.
     /// </para>
     /// </remarks>
     public string? NameOf(SymbolId id)
