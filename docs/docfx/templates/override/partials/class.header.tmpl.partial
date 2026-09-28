@@ -8,7 +8,7 @@
    real ancestor chain. Keep Mustache tag braces out of this comment: a closing
    pair would end the comment early and dump the rest of it onto the page.}}
 
-<h1 id="{{id}}" data-uid="{{uid}}" class="text-break">
+<h1 id="{{id}}" data-uid="{{uid}}" class="text-break api-declaration">
   {{#declarationHeading}}{{declarationHeading}}{{/declarationHeading}}
   {{^declarationHeading}}{{>partials/title}}{{/declarationHeading}}
   {{#sourceurl}}<a class="header-action link-secondary" title="View source" href="{{sourceurl}}"><i class="bi bi-code-slash"></i></a>{{/sourceurl}}

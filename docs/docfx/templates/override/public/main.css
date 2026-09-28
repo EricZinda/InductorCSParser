@@ -40,6 +40,24 @@ article h4, article h5, article h6 {
 article h2 { margin-top: 1.8rem; }
 article h3 { margin-top: 1.4rem; }
 
+/* Declaration bars use Bootstrap's paired theme colors so both the surface
+   and text follow the reader's light/dark preference. Long signatures wrap. */
+article .api-declaration {
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-body-color);
+  border: 1px solid var(--bs-border-color);
+  border-radius: .35rem;
+  padding: .85rem 1rem;
+  margin-bottom: 1rem;
+  font-family: var(--bs-font-monospace);
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+article h3.api-declaration { margin-top: 2.25rem; }
+article h1.api-declaration { font-size: 1.35rem; }
+
 /* Greyer masthead text, like the Minimal Mistakes top bar. */
 .navbar .navbar-brand { font-weight: 700; }
 
