@@ -550,11 +550,15 @@ public abstract class Rule
     /// node with a digitSequence node inside it. The alias's node takes the place of this rule's
     /// node rather than wrapping it.
     /// <para>
-    /// The substitution only happens on a successful match, so it doesn't affect
-    /// error reporting. A <see cref="Rule.WithError">Rule.WithError</see> on this rule (the one being aliased) records
-    /// its message at the point inside it where the match broke. A <see cref="Rule.WithError">Rule.WithError</see> on
-    /// the alias records when this rule fails as a whole. If both are set, the
-    /// usual deepest-failure rule decides which message the parse reports.
+    /// Aliasing doesn't change error reporting. If <c>digitSequence</c> has a
+    /// <see cref="Rule.WithError(string, bool)">Rule.WithError</see>, that message is what a failed
+    /// <c>year</c> match reports, the same as when digitSequence is matched directly. A
+    /// <see cref="Rule.WithError(string, bool)">Rule.WithError</see> on the alias itself is for when the
+    /// aliased rule has no message of its own, and it lets two aliases of one shared rule report
+    /// different messages ("Expected a year", "Expected a month"). If both have a message, the
+    /// aliased rule's wins, because both failures land at the same position and it records first.
+    /// To make the alias's message win instead, mark it <c>forced: true</c>. See
+    /// <a href="../docs/ErrorArchitecture.md#alias-and-error-attribution">Alias and error attribution</a>.
     /// </para>
     /// </remarks>
     public Rule AliasedAs(string name) => new AliasRule(this).As(name);
