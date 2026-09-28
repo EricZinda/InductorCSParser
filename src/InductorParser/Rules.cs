@@ -175,11 +175,11 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
-    /// cluster). Literal matches a sequence of them in order, so the
+    /// cluster). <see cref="Rules.Literal">Rules.Literal</see> matches a sequence of them in order, so the
     /// string is the exact text to match.
     /// For a one-token match use <see cref="Token(string)">Rules.Token(string)</see>.
-    /// Literal is the N-token generalization and collapses what
-    /// would otherwise be N Token rules into
+    /// <see cref="Rules.Literal">Rules.Literal</see> is the N-token generalization and collapses what
+    /// would otherwise be N <see cref="Rules.Token(char)">Rules.Token</see> rules into
     /// one. 
     /// </remarks>
     public static Rule Literal(string value) => new LiteralRule(value);
@@ -287,7 +287,7 @@ public static class Rules
     /// Use this for the hot scanning paths: identifiers, words, numbers,
     /// whitespace runs, and other character-class runs where you want the run as
     /// a single symbol, not N independent symbols. The matched text is the same as
-    /// <c>AtLeast(minimumCount, OneOf(set))</c>, but the runtime
+    /// <c><see cref="Rules.AtLeast">Rules.AtLeast</see>(minimumCount, <see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(set))</c>, but the runtime
     /// cost is very different. The <see cref="Rules.OneOf(TokenSet)">Rules.OneOf(TokenSet)</see> form opens a transaction
     /// and allocates a Symbol per token. This rule opens one transaction at the top, runs a tight
     /// scan loop in the lexer, and emits one Symbol over the whole run.
@@ -499,7 +499,7 @@ public static class Rules
     /// </code>
     /// The fluent equivalent is <see cref="Rule.AliasedAs(string)">Rule.AliasedAs(string)</see>.
     /// <para>
-    /// Until <c>.As(...)</c> names it, the alias changes nothing. The
+    /// Until <c><see cref="Rule.As(string)">Rule.As</see>(...)</c> names it, the alias changes nothing. The
     /// match is found under the inner's original name:
     /// <code>
     /// var digits = OneOrMore(OneOf(TokenSet.Digits)).As("digits");
@@ -795,12 +795,12 @@ public static class Rules
     /// <remarks>
     /// Building block for rules that care about token-internal
     /// structure. Can be used for things like: 
-    /// emoji-with-modifier matchers (<c>WithinToken(And(OneOf(EmojiBase),
-    /// ZeroOrMore(OneOf(SkinToneOrZWJ))))</c>), ASCII-only strictness
-    /// (<c>WithinToken(OneOf(TokenSet.Ascii.Letters))</c> rejects any
+    /// emoji-with-modifier matchers (<c><see cref="Rules.WithinToken">Rules.WithinToken</see>(<see cref="Rules.And">Rules.And</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(EmojiBase),
+    /// <see cref="Rules.ZeroOrMore">Rules.ZeroOrMore</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(SkinToneOrZWJ))))</c>), ASCII-only strictness
+    /// (<c><see cref="Rules.WithinToken">Rules.WithinToken</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(TokenSet.Ascii.Letters))</c> rejects any
     /// multi-rune token), and validating the ordered jamo inside a Hangul
     /// syllable that's written as conjoining jamo
-    /// (<c>WithinToken(And(OneOf(Leading), OneOf(Vowel), Optional(OneOf(Trailing))))</c>
+    /// (<c><see cref="Rules.WithinToken">Rules.WithinToken</see>(<see cref="Rules.And">Rules.And</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(Leading), <see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(Vowel), <see cref="Rules.Optional">Rules.Optional</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(Trailing))))</c>
     /// matches one lead-vowel-optional-tail syllable).
     /// <para>
     /// One leaf Symbol is emitted per successful match, representing the
@@ -811,7 +811,7 @@ public static class Rules
     /// matched, so you see the outcome but not the steps inside. The inner
     /// parse is bounded to the token's rune span. The sub-lexer's recursion,
     /// rule-count, timeout, and cancellation budgets all count against
-    /// the outer parse: a <see cref="InductorParser.ParseCancellation.Cancel">ParseCancellation.Cancel()</see> or expired Timeout observed on
+    /// the outer parse: a <see cref="InductorParser.ParseCancellation.Cancel">ParseCancellation.Cancel()</see> or expired <see cref="ParseOptions.Timeout">ParseOptions.Timeout</see> observed on
     /// either lexer trips both, and <see cref="InductorParser.ParseOptions.MaxDepth">ParseOptions.MaxDepth</see> / <see cref="InductorParser.ParseOptions.RuleCountLimit">ParseOptions.RuleCountLimit</see> cover the
     /// combined outer-plus-inner work rather than letting the inner
     /// rule spend a fresh budget on top of the outer's.

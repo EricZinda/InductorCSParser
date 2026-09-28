@@ -6,7 +6,7 @@ using System.Text;
 namespace InductorParser.Lexing.Unicode;
 
 /// <summary>
-/// Whether the runtime's string.Normalize works normally in this
+/// Whether the runtime's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> works normally in this
 /// process, and if not, why.
 /// </summary>
 internal enum HostGlobalizationStatus
@@ -15,18 +15,18 @@ internal enum HostGlobalizationStatus
     Unknown = 0,
 
     /// <summary>
-    /// string.Normalize is composing and no altered mode was detected.
+    /// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> is composing and no altered mode was detected.
     /// </summary>
     RuntimeNormalizes,
 
     /// <summary>
-    /// Invariant globalization: string.Normalize returns its input
+    /// Invariant globalization: <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> returns its input
     /// unchanged and <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">NormalizationHelpers.IsNormalized</see> always reports true.
     /// </summary>
     Invariant,
 
     /// <summary>
-    /// Windows NLS: string.Normalize uses Windows' own normalization
+    /// Windows NLS: <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> uses Windows' own normalization
     /// data instead of ICU.
     /// </summary>
     WindowsNls,
@@ -39,10 +39,10 @@ internal enum HostGlobalizationStatus
 }
 
 /// <summary>
-/// Detects whether the runtime's string.Normalize actually normalizes
+/// Detects whether the runtime's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> actually normalizes
 /// in this process. .NET has process-wide globalization settings
 /// (invariant globalization, Windows NLS) that change what
-/// string.Normalize returns without the parser or its caller doing
+/// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> returns without the parser or its caller doing
 /// anything, and they belong to the host app, so a parser embedded in
 /// someone else's app inherits whatever that app chose. When the
 /// Runtime implementation is active, <c>UnicodeNormalization</c> calls

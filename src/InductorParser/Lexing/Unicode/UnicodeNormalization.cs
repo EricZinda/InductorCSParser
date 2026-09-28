@@ -11,7 +11,7 @@ namespace InductorParser.Lexing.Unicode;
 /// </summary>
 /// <remarks>
 /// This class chooses between two implementations: the runtime's
-/// string.Normalize, and a built-in <a href="https://www.unicode.org/reports/tr15/">UAX #15</a> normalizer
+/// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>, and a built-in <a href="https://www.unicode.org/reports/tr15/">UAX #15</a> normalizer
 /// (<a href="https://www.unicode.org/reports/tr15/">Unicode Normalization Forms</a>) whose generated tables in
 /// UnicodeNormalization.Data.cs are the other half of this partial
 /// class and hold the <a href="https://www.unicode.org/versions/Unicode16.0.0/">Unicode 16.0</a> data, like the built-in segmenter's table.
@@ -20,7 +20,7 @@ namespace InductorParser.Lexing.Unicode;
 /// and the segmenter together (they can never diverge) and is resolved
 /// and frozen on the first query from either. The built-in
 /// implementation exists because Unity's Mono runtime ships a
-/// string.Normalize that doesn't apply compatibility mappings, misses
+/// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> that doesn't apply compatibility mappings, misses
 /// canonical mappings, and accepts ill-formed UTF-16, all of which
 /// .NET's implementation gets right.
 /// <para>
@@ -44,7 +44,7 @@ internal static partial class UnicodeNormalization
     /// Normalize <paramref name="input"/> to <paramref name="form"/>.
     /// The first call resolves and freezes the process-wide
     /// implementation choice (<see cref="InductorParser.Lexing.UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>): the
-    /// normalized string comes from the runtime's string.Normalize or
+    /// normalized string comes from the runtime's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> or
     /// the built-in <a href="https://www.unicode.org/reports/tr15/">UAX #15</a> implementation below.
     /// </summary>
     public static string Normalize(string input, NormalizationForm form)

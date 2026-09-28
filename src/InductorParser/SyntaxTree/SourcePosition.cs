@@ -6,7 +6,7 @@ namespace InductorParser.SyntaxTree;
 /// the input from offset 0.
 /// </summary>
 /// <remarks>
-/// Line and <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">SourcePosition.CharColumn</see> are zero-based. <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">SourcePosition.CharColumn</see> counts UTF-16 code units, the same unit as
+/// <see cref="Line">SourcePosition.Line</see> and <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">SourcePosition.CharColumn</see> are zero-based. <see cref="InductorParser.SyntaxTree.SourcePosition.CharColumn">SourcePosition.CharColumn</see> counts UTF-16 code units, the same unit as
 /// <see cref="CharIndex">SourcePosition.CharIndex</see>, matching the Language Server Protocol convention editor diagnostics
 /// use. <see cref="TokenColumn">SourcePosition.TokenColumn</see> is the grapheme-based counterpart, for human-facing output. Line breaks follow <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> accepts: LF, CRLF (one
 /// break, not two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029). Keeping the two sets

@@ -6,7 +6,7 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 /// <summary>
-/// This is how you set options for a single Parse call, things like: trace output, the resource budgets (rule
+/// This is how you set options for a single <see cref="Rule.Parse(string)">Rule.Parse</see> call, things like: trace output, the resource budgets (rule
 /// count, recursion depth, wall-clock timeout), external cancellation,
 /// output-tree shape, and alternative templates for the parser's default error
 /// messages.
@@ -14,7 +14,7 @@ namespace InductorParser;
 /// <remarks>
 /// <a href="../docs/Primer3.md#compatibility-vs-canonical">Unicode normalization form</a>
 /// is a grammar-level decision committed at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>
-/// time, not a parse option. Call rule.Compile() with a Normalization form (or
+/// time, not a parse option. Call <see cref="Rule.Compile()">Rule.Compile</see>() with a Normalization form (or
 /// null to disable normalization) before parsing if you want a form other 
 /// than the FormC default. See <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(NormalizationForm?)</see>.
 /// </remarks>
@@ -94,11 +94,11 @@ public sealed class ParseOptions
     /// fires once every so many rule invocations, not on every step (checking
     /// the clock on every step would impact performance negatively). A parse that
     /// finishes in fewer invocations than that interval never reaches a check,
-    /// so a very short parse can run past a very small Timeout and still return
+    /// so a very short parse can run past a very small <see cref="ParseOptions.Timeout">ParseOptions.Timeout</see> and still return
     /// its normal result instead of aborting. The
     /// deadline is there to stop a long-running or runaway parse, and a parse
     /// long enough to matter runs long enough to hit a check. Don't rely on
-    /// Timeout to trip on a tiny grammar against a tiny input. For a cap that
+    /// <see cref="ParseOptions.Timeout">ParseOptions.Timeout</see> to trip on a tiny grammar against a tiny input. For a cap that
     /// trips at the same point on every run regardless of hardware, use
     /// <see cref="RuleCountLimit">ParseOptions.RuleCountLimit</see> instead. It's polled at the same periodic
     /// checkpoints, so it shares the granularity caveat described in its
@@ -118,7 +118,7 @@ public sealed class ParseOptions
 
     /// <summary>
     /// When true, the parser ignores the flatten settings of the rules and
-    /// Parse returns a tree that matches the grammar
+    /// <see cref="Rule.Parse(string)">Rule.Parse</see> returns a tree that matches the grammar
     /// one-to-one: every <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see> Symbol, every <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>
     /// node, and every individual leaf symbol is present exactly where the
     /// grammar placed it. Alias subtrees are the one exception, described
@@ -126,8 +126,8 @@ public sealed class ParseOptions
     /// </summary>
     /// <remarks>
     /// Turn this on to debug or inspect a grammar, to <see cref="InductorParser.ParseResult.PrintTree">ParseResult.PrintTree</see> the full
-    /// structure, or to Find(rule) against Symbols that the default path would
-    /// remove. When off (the default) the parser applies each rule's FlattenType before
+    /// structure, or to <see cref="SyntaxTree.Symbol.Find(Rule)">Symbol.Find</see>(rule) against Symbols that the default path would
+    /// remove. When off (the default) the parser applies each rule's <see cref="Rule.FlattenType">Rule.FlattenType</see> before
     /// returning so that <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> nodes are gone, <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>
     /// Symbols have their children lifted into the parent, and
     /// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> Symbols remain as findable nodes. That's the shape
@@ -148,12 +148,12 @@ public sealed class ParseOptions
     public bool PreserveAllSymbols { get; set; } = false;
 
     /// <summary>
-    /// When true, Parse succeeds as soon as the root rule matches, even if the
+    /// When true, <see cref="Rule.Parse(string)">Rule.Parse</see> succeeds as soon as the root rule matches, even if the
     /// lexer hasn't reached end of input.
     /// </summary>
     /// <remarks>
     /// The default (false) requires every token of the input to be consumed by
-    /// the grammar before Parse returns success: trailing characters that the grammar
+    /// the grammar before <see cref="Rule.Parse(string)">Rule.Parse</see> returns success: trailing characters that the grammar
     /// didn't match turn the parse into a failure positioned at the first
     /// unconsumed token. The default is strict because silently accepting
     /// trailing input is usually a bug that grammar authors want to catch.
@@ -201,7 +201,7 @@ public sealed class ParseOptions
         "Unexpected '{character}' at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
     /// Template for the default message when the parser rejects a specific
-    /// input character and no .WithError("...") was attached at the deepest
+    /// input character and no <see cref="Rule.WithError">Rule.WithError</see>("...") was attached at the deepest
     /// failure position. Setting it to null throws.
     /// A built-in English default reports the unexpected character and its location.
     /// Change this template to localize the message or use your app's preferred position format.
@@ -255,7 +255,7 @@ public sealed class ParseOptions
         "Unexpected end of input at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
     /// Template for the default message when the parser fails at end of input
-    /// and no .WithError("...") was attached. See
+    /// and no <see cref="Rule.WithError">Rule.WithError</see>("...") was attached. See
     /// <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder syntax.
     /// Setting it to null throws.
     /// A built-in English default reports unexpected end of input and its location.
@@ -277,10 +277,10 @@ public sealed class ParseOptions
     /// </summary>
     /// <remarks>
     /// Two kinds of input trigger it: an unpaired UTF-16 surrogate (which is
-    /// ill-formed UTF-16), and U+FFFE (which is a noncharacter that .NET's string.Normalize
+    /// ill-formed UTF-16), and U+FFFE (which is a noncharacter that .NET's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
     /// throws upon finding. Note that this parser rejects it the same way on every runtime). The
     /// parse returns <see cref="ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see> with this
-    /// message instead of letting string.Normalize throw an ArgumentException
+    /// message instead of letting <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> throw an ArgumentException
     /// whose text the app can't control.
     /// <para>
     /// See <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder syntax. The

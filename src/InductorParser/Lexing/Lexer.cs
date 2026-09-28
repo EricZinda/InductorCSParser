@@ -25,15 +25,15 @@ namespace InductorParser.Lexing;
 /// or a low surrogate in any position) never crash the lexer. They're
 /// tokenized like any other content and never throw, so most grammars need to
 /// do nothing about them. They won't accidentally match rules that specify literals
-/// and they will be consumed safely by rules that match "anytext" like AnyToken.
+/// and they will be consumed safely by rules that match "anytext" like <see cref="Rules.AnyToken">Rules.AnyToken</see>.
 ///
-/// One caveat: that tolerance is the unnormalized Compile (Compile(null)) story.
-/// A normalizing Compile (FormC/FormD/FormKC/FormKD) runs string.Normalize over
-/// the whole input before the lexer ever sees it, and string.Normalize rejects
+/// One caveat: that tolerance is the unnormalized <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (<see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null)) story.
+/// A normalizing <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (FormC/FormD/FormKC/FormKD) runs <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> over
+/// the whole input before the lexer ever sees it, and <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> rejects
 /// any lone surrogate, bare or fused with a following combining mark. Parse
 /// catches that and returns a <see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see> <see cref="InductorParser.ParseResult">ParseResult</see>, so under a normalizing
 /// grammar malformed input never reaches the lexer at all. A grammar that has to
-/// accept malformed UTF-16 stays on Compile(null).
+/// accept malformed UTF-16 stays on <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null).
 ///
 /// If you
 /// want to detect or reject malformed input, <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> with no normalization and
@@ -93,7 +93,7 @@ public sealed partial class Lexer
     /// For a top-level lexer this is what the caller passed to Parse. For a
     /// sub-lexer (the one WithinTokenRule builds over the runes of one outer
     /// token) this is the substring covering just those runes. The sub-lexer's
-    /// Position, IsEof, <see cref="InductorParser.Lexing.Lexer.DeepestFailurePosition">Lexer.DeepestFailurePosition</see>, and Read / Token offsets are all
+    /// <see cref="Position">Lexer.Position</see>, <see cref="IsEof">Lexer.IsEof</see>, <see cref="InductorParser.Lexing.Lexer.DeepestFailurePosition">Lexer.DeepestFailurePosition</see>, and Read / Token offsets are all
     /// expressed in coordinates of this string. Rule code can bound its own
     /// loops on Input.Length safely either way: the lexer's readable range and
     /// Input.Length are always the same string.
@@ -154,7 +154,7 @@ public sealed partial class Lexer
     /// A user-defined Rule that runs an inner rule against a sub-lexer (the
     /// way the built-in <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see> does) calls this so the inner recursion
     /// can't spend a fresh <see cref="InductorParser.ParseOptions.MaxDepth">ParseOptions.MaxDepth</see> on top of the outer parse's depth, and so
-    /// a Timeout or Cancellation observed on either lexer trips both.
+    /// a <see cref="ParseOptions.Timeout">ParseOptions.Timeout</see> or <see cref="ParseOptions.Cancellation">ParseOptions.Cancellation</see> observed on either lexer trips both.
     /// </summary>
     public void InheritBudgetFrom(Lexer parent) => _budget.InheritFrom(parent._budget);
 
@@ -163,8 +163,8 @@ public sealed partial class Lexer
     /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see> scans many tokens in a single invocation should call
     /// this once per iteration of its inner loop, the same way the
     /// built-in <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">Rules.ScanWhile</see> and <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see> rules do. Without an inner tick
-    /// the budget's periodic check only runs on rule entry, so Timeout,
-    /// Cancellation, and <see cref="InductorParser.ParseOptions.RuleCountLimit">ParseOptions.RuleCountLimit</see> can't observe the per-iteration
+    /// the budget's periodic check only runs on rule entry, so <see cref="ParseOptions.Timeout">ParseOptions.Timeout</see>,
+    /// <see cref="ParseOptions.Cancellation">ParseOptions.Cancellation</see>, and <see cref="InductorParser.ParseOptions.RuleCountLimit">ParseOptions.RuleCountLimit</see> can't observe the per-iteration
     /// work.
     /// </summary>
     /// <remarks>

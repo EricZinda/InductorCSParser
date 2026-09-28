@@ -325,19 +325,19 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// </para>
     /// <para>
     /// Surrogate runes (U+D800..U+DFFF) pass through unchanged: they aren't
-    /// runes (string.Normalize throws on them), and a normalized <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> won't
+    /// runes (<see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> throws on them), and a normalized <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> won't
     /// see them in input, so leaving them in is harmless and preserves the
     /// unnormalized-<see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> semantics some grammars rely on.
     /// </para>
     /// <para>
     /// An entry the active normalizer refuses is dropped. Surrogate runes
     /// never reach this point (they pass through, above), so in practice that
-    /// means U+FFFE, the one well-formed scalar .NET's string.Normalize
+    /// means U+FFFE, the one well-formed scalar .NET's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
     /// rejects. The built-in normalizer refuses it too, on purpose (see
     /// UnicodeNormalization.FindFirstUnnormalizableIndex), so this is the same
     /// on every runtime. The drop is harmless: a normalizing Parse reports
     /// input containing U+FFFE as MalformedInput before any rule runs, so a
-    /// OneOf could never have matched that entry anyway. Even a runtime whose
+    /// <see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see> could never have matched that entry anyway. Even a runtime whose
     /// normalizer accepts U+FFFE ends up in the same place, since that
     /// Parse-time scan rejects the input regardless.
     /// </para>
@@ -517,16 +517,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// normalize into several. The ﬁ ligature (U+FB01) becomes the two
     /// letters "fi". A <see cref="InductorParser.Rules.OneOf(TokenSet)">Rules.OneOf</see> matches exactly one token, and a token is
     /// one grapheme, so a member that has become two graphemes no longer fits
-    /// in the set, and Compile throws rather than guess what you meant.
+    /// in the set, and <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> throws rather than guess what you meant.
     /// <para>
     /// You have two ways to resolve that, and they match different things.
     /// To match the ligature as one unit, take it out of the set and match it
     /// with <see cref="Rules.Literal(string)">Rules.Literal(string)</see> instead. <c>Literal("ﬁ")</c>
     /// compiled under FormKC matches both "ﬁ" and "fi" in the input, because
-    /// a Literal matches a sequence of tokens and Compile normalizes its
+    /// a Literal matches a sequence of tokens and <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> normalizes its
     /// text. To match the letters individually, call this method on the set
     /// before building the rule. The ligature member is replaced by 'f' and
-    /// 'i' as two separate members, so <c>OneOf(set)</c> matches a lone "f"
+    /// 'i' as two separate members, so <c><see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(set)</c> matches a lone "f"
     /// or a lone "i", one token at a time. Input containing the ligature
     /// arrives as two tokens under FormKC, so matching the whole thing that
     /// way takes two OneOfs in a row.
@@ -920,8 +920,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// All surrogate code units U+D800..U+DFFF as a TokenSet. Matchable only by
-    /// grammars compiled with Compile(null), where the lexer surfaces a lone
-    /// surrogate as a one-char token. Under the default Compile(FormC) the lexer
+    /// grammars compiled with <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null), where the lexer surfaces a lone
+    /// surrogate as a one-char token. Under the default <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(FormC) the lexer
     /// pre-rejects lone surrogates from input, so this set has nothing to match.
     /// </summary>
     /// <remarks>
@@ -933,10 +933,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <para>
     /// The two named entry points for putting surrogates into a <see cref="InductorParser.TokenSet">TokenSet</see> are
     /// this constant (the whole block) and <see cref="SurrogateRange">TokenSet.SurrogateRange(int, int)</see> (a
-    /// sub-block). Range, Single, and Runes reject surrogate endpoints /
-    /// arguments. So Surrogates and <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">TokenSet.SurrogateRange</see> are the only places fresh
+    /// sub-block). <see cref="Range(int, int)">TokenSet.Range</see>, <see cref="Single(int)">TokenSet.Single</see>, and <see cref="Runes(string)">TokenSet.Runes</see> reject surrogate endpoints /
+    /// arguments. So <see cref="Surrogates">TokenSet.Surrogates</see> and <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">TokenSet.SurrogateRange</see> are the only places fresh
     /// surrogates come from. From there union, intersection, and difference
-    /// move them between sets. A grammar that doesn't name Surrogates or
+    /// move them between sets. A grammar that doesn't name <see cref="Surrogates">TokenSet.Surrogates</see> or
     /// <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">TokenSet.SurrogateRange</see> never gets one in any <see cref="InductorParser.TokenSet">TokenSet</see> it builds.
     /// </para>
     /// </remarks>
@@ -1002,9 +1002,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// </summary>
     /// <remarks>
     /// Use this to select a specific sub-range of the surrogate block. The
-    /// result is matchable only by grammars compiled with Compile(null), where
+    /// result is matchable only by grammars compiled with <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null), where
     /// the lexer surfaces lone surrogates as one-char tokens. Under the default
-    /// Compile(FormC) the lexer pre-rejects lone surrogates from input, so the
+    /// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(FormC) the lexer pre-rejects lone surrogates from input, so the
     /// set has nothing to match.
     /// </remarks>
     public static TokenSet SurrogateRange(int low, int high)
@@ -1587,7 +1587,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// rejects digits, whitespace, punctuation, symbols, and any multi-rune
     /// grapheme like emoji. A grammar that wants "match everything up to the next
     /// delimiter" or "match anything the other rules didn't claim" should use
-    /// NoneOf(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
+    /// <see cref="Rules.NoneOf(TokenSet)">Rules.NoneOf</see>(stopSet) for delimiter-based stops, or Not(stopRule) + <see cref="Rules.AnyToken">Rules.AnyToken</see>()
     /// for rule-based stops.
     /// </para>
     /// </remarks>
@@ -1704,7 +1704,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// default <see cref="System.Text.DecoderReplacementFallback"/>, so a U+FFFD in your input can
     /// indicate that an upstream decoder replaced malformed data.
     /// Grammars that want to surface or reject those markers can use
-    /// OneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see>) or NoneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see> | ...).
+    /// OneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see>) or <see cref="Rules.NoneOf(TokenSet)">Rules.NoneOf</see>(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see> | ...).
     /// </para>
     /// </remarks>
     public static TokenSet Replacement => _replacement;

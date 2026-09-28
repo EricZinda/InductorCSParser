@@ -10,6 +10,30 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class ParseResultFactoryTests
 {
+    [TestCase(ParseOutcome.Success)]
+    [TestCase(ParseOutcome.GrammarMismatch)]
+    [TestCase(ParseOutcome.MalformedInput)]
+    [TestCase(ParseOutcome.Timeout)]
+    [TestCase(ParseOutcome.RuleCountLimitExceeded)]
+    [TestCase(ParseOutcome.DepthLimitExceeded)]
+    [TestCase(ParseOutcome.Canceled)]
+    public void Completed_results_distinguish_success_from_failure_and_NotRun(ParseOutcome outcome)
+    {
+        var grammar = Eof();
+        var result = outcome switch
+        {
+            ParseOutcome.Success => grammar.Parse(string.Empty),
+            ParseOutcome.GrammarMismatch => grammar.Parse("x"),
+            ParseOutcome.MalformedInput => ParseResult.MalformedInput(0, "bad input", "x", grammar),
+            _ => ParseResult.Aborted(outcome, 0, "aborted", "x", grammar)
+        };
+
+        Assert.That(result.Outcome, Is.EqualTo(outcome));
+        Assert.That(result.Success, Is.EqualTo(outcome == ParseOutcome.Success));
+        Assert.That(result.ErrorPosition.HasValue, Is.EqualTo(outcome != ParseOutcome.Success));
+        Assert.That(result.ToDebugString(), Does.StartWith(outcome.ToString()));
+    }
+
     [Test]
     public void ErrorCharIndex_factory_rejects_out_of_range_values()
     {
@@ -41,6 +65,8 @@ public class ParseResultFactoryTests
         var input = "ab";
 
         Assert.Throws<System.ArgumentException>(() =>
+            ParseResult.Aborted(ParseOutcome.NotRun, errorCharIndex: 0, message: "x", input: input, grammar: grammar));
+        Assert.Throws<System.ArgumentException>(() =>
             ParseResult.Aborted(ParseOutcome.Success, errorCharIndex: 0, message: "x", input: input, grammar: grammar));
         Assert.Throws<System.ArgumentException>(() =>
             ParseResult.Aborted(ParseOutcome.GrammarMismatch, errorCharIndex: 0, message: "x", input: input, grammar: grammar));
@@ -51,11 +77,9 @@ public class ParseResultFactoryTests
     [Test]
     public void Factories_reject_null_required_arguments()
     {
-        // The public factories are for custom parse drivers, but they still
-        // need to enforce the same non-null shape Rule.Parse produces. In
-        // particular, a null grammar on a Succeeded result contradicts the
-        // default-struct check in ParseResult.Success: Outcome is Success, but
-        // Success reports false because _grammar is null.
+        // Both parser engines use these factories, which enforce a consistent
+        // non-null result shape.
+        // Successful results need the grammar for symbol names and tree rendering.
         var grammar = Literal("hi");
         grammar.Compile();
         var symbols = System.Array.Empty<Symbol>();
@@ -88,8 +112,7 @@ public class ParseResultFactoryTests
         // The MalformedInput factory mirrors Failed: a non-Success result
         // with a message and an offending index, but with its own outcome
         // so callers can tell "the input isn't valid Unicode" apart from a
-        // plain grammar mismatch. It's public for custom parse drivers that do
-        // their own normalization.
+        // plain grammar mismatch.
         var grammar = Literal("hi");
         grammar.Compile();
         var input = "ab";

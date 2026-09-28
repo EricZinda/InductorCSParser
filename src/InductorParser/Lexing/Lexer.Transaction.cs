@@ -79,7 +79,7 @@ public sealed partial class Lexer
         /// advanced it to, and <see cref="Dispose">Lexer.Transaction.Dispose()</see> won't roll it back.
         /// </summary>
         /// <remarks>
-        /// Commit does nothing to the failure tracker. Failures survive both
+        /// <see cref="Commit">Lexer.Transaction.Commit</see> does nothing to the failure tracker. Failures survive both
         /// commit and rollback. A rejected Or branch or a count rule's stopped
         /// iteration is real evidence about the input and is kept, ranked by
         /// depth like any other failure. The one exception is lookahead, which
@@ -111,10 +111,10 @@ public sealed partial class Lexer
         /// </summary>
         /// <remarks>
         /// If <see cref="Commit">Lexer.Transaction.Commit()</see> or <see cref="Rollback">Lexer.Transaction.Rollback()</see> already ran, the
-        /// position is left alone. Either way Dispose pops the depth counter
+        /// position is left alone. Either way <see cref="Dispose">Lexer.Transaction.Dispose</see> pops the depth counter
         /// that drives trace indentation and merges this transaction's deepest
         /// failure back into the enclosing one. The pop waits until the scope
-        /// exits rather than happening in Commit or Rollback, which allows
+        /// exits rather than happening in <see cref="Commit">Lexer.Transaction.Commit</see> or <see cref="Rollback">Lexer.Transaction.Rollback</see>, which allows
         /// traces to emit at the right level from within the using block after
         /// a commit or rollback. Flag checks keep it balanced so each part runs
         /// once even when an explicit call came first.

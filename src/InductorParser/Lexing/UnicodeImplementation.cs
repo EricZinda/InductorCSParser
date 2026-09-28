@@ -20,13 +20,13 @@ public enum UnicodeImplementation
     /// in sync with the rest of the runtime's Unicode machinery. In
     /// the netstandard2.1 assembly (the one Unity's Mono and IL2CPP
     /// load) it means <see cref="Bundled">UnicodeImplementation.Bundled</see>, because those runtimes
-    /// ship a StringInfo that predates <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> and a string.Normalize
+    /// ship a StringInfo that predates <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> and a <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
     /// that misses mappings and accepts ill-formed UTF-16.
     /// </summary>
     Automatic,
 
     /// <summary>
-    /// Use the runtime's StringInfo and string.Normalize, at whatever
+    /// Use the runtime's StringInfo and <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>, at whatever
     /// Unicode version the runtime ships.
     /// </summary>
     Runtime,

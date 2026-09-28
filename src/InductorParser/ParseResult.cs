@@ -13,7 +13,7 @@ namespace InductorParser;
 /// <remarks>
 /// <see cref="Outcome">ParseResult.Outcome</see> distinguishes "the grammar rejected the input"
 /// (<see cref="InductorParser.ParseOutcome.GrammarMismatch">ParseOutcome.GrammarMismatch</see>) from "the input can't be normalized" (<see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see>)
-/// from "a budget tripped" (Timeout, <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">ParseOutcome.RuleCountLimitExceeded</see>,
+/// from "a budget tripped" (<see cref="ParseOutcome.Timeout">ParseOutcome.Timeout</see>, <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">ParseOutcome.RuleCountLimitExceeded</see>,
 /// <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">ParseOutcome.DepthLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.Canceled">ParseOutcome.Canceled</see>) so callers can show different messages to the
 /// user in each case.
 /// <para>
@@ -40,8 +40,9 @@ public readonly struct ParseResult
     private readonly string? _errorMessage;
 
     /// <summary>
-    /// Returns the shape of this result: success, grammar mismatch, or
-    /// which budget tripped. Always check this (or <see cref="Success">ParseResult.Success</see>)
+    /// Reports whether a parse ran and how it ended. Defaults to
+    /// <see cref="ParseOutcome.NotRun">ParseOutcome.NotRun</see>.
+    /// Check this (or <see cref="Success">ParseResult.Success</see>)
     /// before reading <see cref="Tree">ParseResult.Tree</see> / <see cref="Symbols">ParseResult.Symbols</see>.
     /// </summary>
     /// <remarks>See <see cref="ParseOutcome"/> for the full list.</remarks>
@@ -173,7 +174,7 @@ public readonly struct ParseResult
 
     /// <summary>
     /// The error position packed into a <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see> struct. Returns null on
-    /// a successful parse.
+    /// a successful parse or <see cref="ParseOutcome.NotRun">ParseOutcome.NotRun</see>.
     /// </summary>
     /// <remarks>
     /// Use this when you need more than one position unit (line + column for a
@@ -181,27 +182,24 @@ public readonly struct ParseResult
     /// walks of the input.
     /// </remarks>
     public SourcePosition? ErrorPosition =>
-        Outcome == ParseOutcome.Success
+        Outcome == ParseOutcome.Success || Outcome == ParseOutcome.NotRun
             ? null
             : SourcePosition.From(_input ?? string.Empty, ErrorCharIndex);
 
     /// <summary>
-    /// True when <see cref="Outcome">ParseResult.Outcome</see> is Success, false otherwise. Most callers
+    /// True when this result came from a successful parse, false otherwise. Most callers
     /// check this first and only inspect <see cref="Tree">ParseResult.Tree</see> / <see cref="Symbols">ParseResult.Symbols</see>
     /// when it's true.
     /// </summary>
     /// <remarks>
-    /// <see cref="InductorParser.ParseOutcome.Success">ParseOutcome.Success</see> is the enum's zero value, so a default-constructed
-    /// ParseResult (a zeroed array element, a FirstOrDefault on an empty list)
-    /// has Outcome == Success despite never coming from a parse. The
-    /// <c>_grammar != null</c> check rejects those: every real result is built
-    /// through Succeeded / Failed / Aborted, which stamp the grammar.
+    /// Equivalent to checking whether <see cref="Outcome">ParseResult.Outcome</see>
+    /// is <see cref="ParseOutcome.Success">ParseOutcome.Success</see>.
     /// </remarks>
-    public bool Success => _grammar != null && Outcome == ParseOutcome.Success;
+    public bool Success => Outcome == ParseOutcome.Success;
 
     /// <summary>
     /// Depth-first search across every top-level Symbol for the first node whose
-    /// Id matches the rule. Returns null if no match.
+    /// <see cref="SyntaxTree.Symbol.Id">Symbol.Id</see> matches the rule. Returns null if no match.
     /// </summary>
     public Symbol? Find(Rule rule)
     {
@@ -253,7 +251,7 @@ public readonly struct ParseResult
     /// </summary>
     /// <remarks>
     /// The <see cref="InductorParser.ParseResult">ParseResult</see>-level mirror of <see cref="InductorParser.SyntaxTree.Symbol.DisplayName">Symbol.DisplayName</see>: same fallback chain
-    /// (.As(...) name, else class-derived trace label, else rune text), so it's
+    /// (<see cref="Rule.As(string)">Rule.As</see>(...) name, else class-derived trace label, else rune text), so it's
     /// a display label, not a dispatch key.
     /// </remarks>
     public string? DisplayNameOf(SymbolId id) => _grammar?.NameOf(id);
@@ -306,7 +304,7 @@ public readonly struct ParseResult
     /// Debug-friendly rendering. On success, shows the parse tree (same output
     /// as <see cref="PrintTree">ParseResult.PrintTree()</see>) prefixed with "Success:". On failure, a
     /// one-line summary with the outcome, character index, and the error
-    /// message.
+    /// message. Returns "NotRun" for a default result.
     /// </summary>
     /// <remarks>
     /// A human-readable debug aid whose layout may change between versions.
@@ -315,10 +313,10 @@ public readonly struct ParseResult
     /// </remarks>
     public string ToDebugString()
     {
+        if (Outcome == ParseOutcome.NotRun)
+            return nameof(ParseOutcome.NotRun);
         if (Outcome == ParseOutcome.Success)
         {
-            if (_symbols == null || _grammar == null)
-                return "Success (empty ParseResult)";
             string tree = PrintTree();
             return tree.Length == 0 ? "Success (no symbols)" : "Success:\n" + tree;
         }
@@ -341,44 +339,42 @@ public readonly struct ParseResult
         _grammar = grammar;
     }
 
-    // The three factory methods below are public so custom parse drivers can
-    // build a ParseResult with the same structure the built-in Parse produces.
-    // Normal callers don't construct ParseResults directly.
+    // Shared result construction for the parser and alternative evaluator.
+    // Consumers obtain results through Rule.Parse.
 
     /// <summary>
-    /// Build a successful result. Outcome is Success, error fields are empty.
+    /// Build a successful result. <see cref="ParseResult.Outcome">ParseResult.Outcome</see> is <see cref="ParseOutcome.Success">ParseOutcome.Success</see>, error fields are empty.
     /// </summary>
-    public static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar)
+    internal static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar)
     {
         if (symbols == null) throw new ArgumentNullException(nameof(symbols));
         return new ParseResult(ParseOutcome.Success, CopySymbols(symbols), string.Empty, 0, input, grammar);
     }
 
     /// <summary>
-    /// Build a grammar-mismatch result. Outcome is <see cref="InductorParser.ParseOutcome.GrammarMismatch">ParseOutcome.GrammarMismatch</see>, the error
+    /// Build a grammar-mismatch result. <see cref="ParseResult.Outcome">ParseResult.Outcome</see> is <see cref="InductorParser.ParseOutcome.GrammarMismatch">ParseOutcome.GrammarMismatch</see>, the error
     /// fields have the deepest-failure message and position.
     /// </summary>
-    public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
+    internal static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
 
     /// <summary>
-    /// Build a malformed-input result. Outcome is <see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see>: the input
+    /// Build a malformed-input result. <see cref="ParseResult.Outcome">ParseResult.Outcome</see> is <see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see>: the input
     /// couldn't be normalized to the grammar's form because it isn't well-formed
     /// Unicode. The error fields have the localized message and the offending
     /// character index. <see cref="InductorParser.Rule.Parse(System.String)">Rule.Parse</see> builds this in place of letting .NET's
-    /// string.Normalize throw. It's public so a custom parse driver that does its
-    /// own normalization can report the same shape.
+    /// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> throw.
     /// </summary>
-    public static ParseResult MalformedInput(int errorCharIndex, string message, string input, Rule grammar) =>
+    internal static ParseResult MalformedInput(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.MalformedInput, null, message, errorCharIndex, input, grammar);
 
     /// <summary>
-    /// Build a budget-abort result. Outcome is one of Timeout,
+    /// Build a budget-abort result. <see cref="ParseResult.Outcome">ParseResult.Outcome</see> is one of <see cref="ParseOutcome.Timeout">ParseOutcome.Timeout</see>,
     /// <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">ParseOutcome.RuleCountLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">ParseOutcome.DepthLimitExceeded</see>, or <see cref="InductorParser.ParseOutcome.Canceled">ParseOutcome.Canceled</see>. The error fields
     /// have the matching "Parse aborted: ..." message and the deepest-failure
     /// position so callers still get a "how far did we get" hint.
     /// </summary>
-    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar)
+    internal static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar)
     {
         if (!IsAbortOutcome(outcome))
             throw new ArgumentException(

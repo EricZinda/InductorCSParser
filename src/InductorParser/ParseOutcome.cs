@@ -1,11 +1,18 @@
 namespace InductorParser;
 
 /// <summary>
-/// Why a parse ended: success, a normal grammar mismatch, or one of the
-/// budget / cancellation aborts. Accessed from <see cref="ParseResult.Outcome">ParseResult.Outcome</see>.
+/// Whether a parse ran and how it ended. Accessed from
+/// <see cref="ParseResult.Outcome">ParseResult.Outcome</see>.
 /// </summary>
 public enum ParseOutcome
 {
+    /// <summary>
+    /// No parse result has been assigned. This is the outcome of
+    /// <c>default(ParseResult)</c>. <see cref="Rule.Parse(string)">Rule.Parse(string)</see>
+    /// never returns it.
+    /// </summary>
+    NotRun = 0,
+
     /// <summary>
     /// The grammar matched the input (and consumed all of it, unless
     /// <see cref="ParseOptions.AllowTrailingInput">ParseOptions.AllowTrailingInput</see> was set).

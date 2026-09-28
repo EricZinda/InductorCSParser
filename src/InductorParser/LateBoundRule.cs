@@ -42,14 +42,14 @@ namespace InductorParser;
 /// static readonly Rule _init = Expression.Bind(Sum);
 /// </code>
 /// Term sees Expression as a valid (but still unbound) rule at construction
-/// time. The last field exists only to run the Bind call at type
-/// initialization, after all three rules exist. Bind returns the
+/// time. The last field exists only to run the <see cref="LateBoundRule.Bind">LateBoundRule.Bind</see> call at type
+/// initialization, after all three rules exist. <see cref="LateBoundRule.Bind">LateBoundRule.Bind</see> returns the
 /// LateBoundRule, which is a Rule, so the field can be typed either way.
 /// <para>
 /// A LateBoundRule is transparent. At parse time it forwards to its target,
 /// and the parse tree shows the target's Symbol, never the placeholder's.
 /// Its <see cref="FlattenType">LateBoundRule.FlattenType</see> and <see cref="EmitsLeaf">LateBoundRule.EmitsLeaf</see> come from the
-/// target too, so <c>Alias(lateBound)</c>, <c>And(x, lateBound, y)</c>, and
+/// target too, so <c>Alias(lateBound)</c>, <c><see cref="Rules.And">Rules.And</see>(x, lateBound, y)</c>, and
 /// every other composition behave exactly as if the target were written in
 /// its place. For the same reason the fluent modifiers don't apply to it:
 /// <see cref="As(string)">LateBoundRule.As(string)</see>, <see cref="Flatten(FlattenType)">LateBoundRule.Flatten(FlattenType)</see>, and
@@ -58,9 +58,9 @@ namespace InductorParser;
 /// for trace output and error messages.
 /// </para>
 /// <para>
-/// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (or the first Parse, which compiles for you)
+/// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (or the first <see cref="Rule.Parse(string)">Rule.Parse</see>, which compiles for you)
 /// throws if a LateBoundRule was never bound, naming it by that label, so
-/// a forgotten Bind fails at startup instead of as a null reference deep
+/// a forgotten <see cref="LateBoundRule.Bind">LateBoundRule.Bind</see> fails at startup instead of as a null reference deep
 /// inside a later parse.
 /// </para>
 /// </remarks>
@@ -74,7 +74,7 @@ public sealed class LateBoundRule : Rule
     /// for trace output and error messages, such as "Rule 'expression' is a
     /// LateBoundRule that was never bound". It isn't a findable name: no
     /// Symbol in the parse tree ever refers to the placeholder. To find the
-    /// bound shape by name, name the target rule with <c>.As(name)</c>.
+    /// bound shape by name, name the target rule with <c><see cref="Rule.As(string)">Rule.As</see>(name)</c>.
     /// </summary>
     // base(FlattenType.Flatten) only seeds the base class's backing
     // field. The FlattenType property below overrides the getter to
@@ -94,8 +94,8 @@ public sealed class LateBoundRule : Rule
     /// Attach the real rule. Returns this LateBoundRule so the call can sit
     /// in a field initializer that runs at type initialization, after every
     /// rule it depends on exists (see the class remarks for the pattern).
-    /// Set-once: a second call throws, the same way <c>.As</c> and
-    /// <c>.WithError</c> do on any rule.
+    /// Set-once: a second call throws, the same way <c><see cref="Rule.As(string)">Rule.As</see></c> and
+    /// <c><see cref="Rule.WithError">Rule.WithError</see></c> do on any rule.
     /// </summary>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="target"/> is null.
@@ -126,7 +126,7 @@ public sealed class LateBoundRule : Rule
     /// <summary>
     /// The bound target's <see cref="InductorParser.SyntaxTree.FlattenType"/>, worked out when the
     /// grammar is compiled. A LateBoundRule has no flatten policy of its
-    /// own. Reading this before Compile throws rather than guess a value
+    /// own. Reading this before <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> throws rather than guess a value
     /// that could turn out wrong.
     /// </summary>
     /// <exception cref="InvalidOperationException">
@@ -164,8 +164,8 @@ public sealed class LateBoundRule : Rule
 
     /// <summary>
     /// Not supported. A LateBoundRule is transparent at parse time, so no
-    /// Symbol would ever have the name and Find could never match it.
-    /// Name the target rule instead (<c>target.As("name")</c>). For a label
+    /// Symbol would ever have the name and <see cref="SyntaxTree.Symbol.Find(Rule)">Symbol.Find</see> could never match it.
+    /// Name the target rule instead (<c><see cref="Rule.As(string)">Rule.As</see>("name")</c>). For a label
     /// in traces and error messages, pass the name to the constructor.
     /// </summary>
     /// <exception cref="InvalidOperationException">Always.</exception>
@@ -179,7 +179,7 @@ public sealed class LateBoundRule : Rule
     /// <summary>
     /// Not supported. A LateBoundRule is transparent at parse time, so no
     /// Symbol would ever have the id. Set the explicit id on the target rule
-    /// instead (<c>target.As(new SymbolId(...))</c>).
+    /// instead (<c><see cref="Rule.As(SyntaxTree.SymbolId)">Rule.As</see>(new SymbolId(...))</c>).
     /// </summary>
     /// <exception cref="InvalidOperationException">Always.</exception>
     public override Rule As(SymbolId id) => throw new InvalidOperationException(
@@ -191,7 +191,7 @@ public sealed class LateBoundRule : Rule
     /// <summary>
     /// Not supported. A LateBoundRule's <see cref="FlattenType">LateBoundRule.FlattenType</see> forwards to
     /// the bound target, so a value set here would never take effect. Set
-    /// <c>.Flatten(...)</c> on the target rule instead.
+    /// <c><see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(...)</c> on the target rule instead.
     /// </summary>
     /// <exception cref="InvalidOperationException">Always.</exception>
     public override Rule Flatten(FlattenType type) => throw new InvalidOperationException(
@@ -212,7 +212,7 @@ public sealed class LateBoundRule : Rule
     /// <summary>
     /// Not supported. A LateBoundRule forwards the parse to its target, which
     /// records its own failures with its own message, so a message set here
-    /// would never be consulted. Set <c>.WithError(...)</c> on the target
+    /// would never be consulted. Set <c><see cref="Rule.WithError">Rule.WithError</see>(...)</c> on the target
     /// rule instead.
     /// </summary>
     /// <exception cref="InvalidOperationException">Always.</exception>

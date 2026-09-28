@@ -77,7 +77,7 @@ public static class UnicodeEnvironment
     /// <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>: the built-in
     /// implementations in the netstandard2.1 assembly (the build Unity
     /// and other pre-net8.0 hosts load), the runtime's StringInfo and
-    /// string.Normalize in the net8.0 assembly. Set it once at startup,
+    /// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> in the net8.0 assembly. Set it once at startup,
     /// before building grammars or parsing. The first segmentation or
     /// normalization query (constructing a Token rule, compiling a
     /// grammar, parsing, mapping positions, or calling any
@@ -128,10 +128,10 @@ public static class UnicodeEnvironment
 
     /// <summary>
     /// Opt-in acceptance of the host's globalization configuration when
-    /// the Runtime implementation is active. Defaults to false: when
-    /// the parser is normalizing with the runtime's string.Normalize
+    /// the <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see> implementation is active. Defaults to false: when
+    /// the parser is normalizing with the runtime's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
     /// and the process is running under invariant globalization (which
-    /// makes string.Normalize return its input unchanged) or Windows
+    /// makes <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> return its input unchanged) or Windows
     /// NLS (which normalizes from Windows' own data instead of ICU),
     /// the first normalizing <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> or Parse throws
     /// <see cref="InvalidOperationException"/>, because a normalizing
@@ -169,7 +169,7 @@ public static class UnicodeEnvironment
     /// <summary>
     /// The implementation being used. It's one of
     /// <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see> or
-    /// <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>, never Automatic.
+    /// <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>, never <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>.
     /// Reading it resolves and freezes the choice the same way the
     /// first segmentation or normalization query does, so the answer
     /// can never be invalidated by a later change.

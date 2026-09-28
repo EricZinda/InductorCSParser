@@ -23,7 +23,7 @@ public static class NormalizationHelpers
     /// same string instance when the text is already normalized.
     /// Throws <see cref="ArgumentException"/> on text the normalizers
     /// reject: an unpaired UTF-16 surrogate (ill-formed UTF-16), or
-    /// U+FFFE (a noncharacter .NET's string.Normalize rejects, matched
+    /// U+FFFE (a noncharacter .NET's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> rejects, matched
     /// here so every runtime behaves the same). Also throws
     /// <see cref="ArgumentException"/> when <paramref name="form"/>
     /// isn't one of the four defined normalization forms.

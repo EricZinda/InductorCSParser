@@ -12,8 +12,8 @@ namespace InductorParser.SyntaxTree;
 /// </summary>
 /// <remarks>
 /// A Symbol has one of two shapes. A composite has a list of child Symbols and comes from
-/// rules that build structure (And, Or, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see>). A leaf stores a section of the original
-/// input (a ReadOnlyMemory&lt;char&gt;) and comes from rules that match content (Token, Literal,
+/// rules that build structure (<see cref="Rules.And">Rules.And</see>, <see cref="Rules.Or">Rules.Or</see>, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see>). A leaf stores a section of the original
+/// input (a ReadOnlyMemory&lt;char&gt;) and comes from rules that match content (<see cref="Rules.Token(char)">Rules.Token</see>, <see cref="Rules.Literal">Rules.Literal</see>,
 /// <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see>). The parse never copies input into a new string.
 /// <para>
 /// A Symbol can also report where in the source it came from. <see cref="SourceRange">Symbol.SourceRange</see> returns
@@ -151,13 +151,13 @@ public sealed class Symbol
 
     /// <summary>
     /// Does this Symbol come from the rule the grammar named <paramref name="ruleName"/> via
-    /// .As("name")? For tree walkers that dispatch on the grammar name rather than hold a Rule
+    /// <see cref="Rule.As(string)">Rule.As</see>("name")? For tree walkers that dispatch on the grammar name rather than hold a Rule
     /// reference.
     /// </summary>
     /// <remarks>
     /// Works only on Symbols that came out of a real <see cref="Rule.Parse(string)">Rule.Parse(string)</see> call.
     /// Hand-built Symbols (no context) and Symbols whose id maps to an unnamed rule both return
-    /// false. The name resolves through the same .As(...) index <see cref="Rule.IdOf(string)">Rule.IdOf(string)</see>
+    /// false. The name resolves through the same <see cref="Rule.As(string)">Rule.As</see>(...) index <see cref="Rule.IdOf(string)">Rule.IdOf(string)</see>
     /// uses, so it's an O(1) lookup after the first call. Class-derived trace labels ("And",
     /// "OneOrMore") aren't in that index, so this never matches them even though
     /// <see cref="DisplayName">Symbol.DisplayName</see> falls back to them for unnamed rules.
@@ -179,18 +179,18 @@ public sealed class Symbol
     /// printing, or null when there's no grammar to resolve against.
     /// </summary>
     /// <remarks>
-    /// When the rule was constructed with .As("name"), that name is returned. Otherwise, it falls
+    /// When the rule was constructed with <see cref="Rule.As(string)">Rule.As</see>("name"), that name is returned. Otherwise, it falls
     /// back the same way <see cref="Rule.NameOf(SymbolId)">Rule.NameOf(SymbolId)</see> does: a character-leaf rule resolves
     /// to the matched rune's own text, and any other rule resolves to its class-derived trace
-    /// label ("And", "OneOrMore", "BetweenInclusive[1..3]"). So an anonymous And(...)
-    /// returns "And" and an anonymous Token('a') leaf returns "a". Returns null when the Symbol
+    /// label ("And", "OneOrMore", "BetweenInclusive[1..3]"). So an anonymous <see cref="Rules.And">Rules.And</see>(...)
+    /// returns "And" and an anonymous <see cref="Rules.Token(char)">Rules.Token</see>('a') leaf returns "a". Returns null when the Symbol
     /// was hand-built with no <see cref="ParseContext"/>, or its id doesn't map to any rule
     /// reachable from the parse's grammar.
     /// <para>
     /// This is a display label, not a dispatch key. Because it includes the trace-label and
     /// rune-text fallbacks it's neither unique nor limited to names the grammar author chose. To
     /// test whether a Symbol came from a rule the author actually named, use
-    /// <see cref="Is(string)">Symbol.Is(string)</see>, which matches only .As(...) names: <see cref="DisplayName">Symbol.DisplayName</see> can
+    /// <see cref="Is(string)">Symbol.Is(string)</see>, which matches only <see cref="Rule.As(string)">Rule.As</see>(...) names: <see cref="DisplayName">Symbol.DisplayName</see> can
     /// be "And" while <see cref="Is(string)">Symbol.Is(string)</see> with "And" is false.
     /// </para>
     /// </remarks>
@@ -369,7 +369,7 @@ public sealed class Symbol
     /// Unlike <see cref="ToString">Symbol.ToString()</see>, which concatenates the text of the leaves present in the
     /// tree and renders it in the normalized form the parser matched, this reaches back to the
     /// original input by character range, so it includes characters matched by <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>
-    /// leaves (the default for Token, Literal, <see cref="InductorParser.Rules.EndOfLine(System.Boolean)">Rules.EndOfLine</see>) that
+    /// leaves (the default for <see cref="Rules.Token(char)">Rules.Token</see>, <see cref="Rules.Literal">Rules.Literal</see>, <see cref="InductorParser.Rules.EndOfLine(System.Boolean)">Rules.EndOfLine</see>) that
     /// aren't in the tree for <see cref="ToString">Symbol.ToString()</see> to render. When the grammar normalized the
     /// input, the parse-input offsets are translated back to the original before the section is
     /// taken, so the result is always a piece of the user's original input.
