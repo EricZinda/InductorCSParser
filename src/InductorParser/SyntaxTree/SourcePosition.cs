@@ -31,12 +31,10 @@ public readonly struct SourcePosition
     /// <summary>
     /// The index of the token (i.e. a grapheme: a character as the user sees it) that <see cref="CharIndex">SourcePosition.CharIndex</see> falls in,
     /// using the same <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> extended-grapheme-cluster segmentation the lexer uses.
-    /// </summary>
-    /// <remarks>
     /// A family emoji or an accented letter typed as base + accent is one token even though it's
     /// several runes underneath, so this index is less than or equal to <see cref="CharIndex">SourcePosition.CharIndex</see> on any
     /// input that contains those.
-    /// </remarks>
+    /// </summary>
     public int TokenIndex { get; }
 
     /// <summary>Zero-based line number, Language Server Protocol convention.</summary>
@@ -51,14 +49,12 @@ public readonly struct SourcePosition
     /// <summary>
     /// Zero-based column within the line, measured in tokens (Unicode graphemes).
     /// Computed lazily from <see cref="CharIndex">SourcePosition.CharIndex</see> and <see cref="Input">SourcePosition.Input</see>.
-    /// </summary>
-    /// <remarks>
     /// The human-facing counterpart to <see cref="CharColumn">SourcePosition.CharColumn</see>: an emoji, a flag,
     /// or a base character plus a combining mark earlier on the line counts as one
     /// column, not as its several UTF-16 code units, so it matches the character a
     /// person sees. Use <see cref="CharColumn">SourcePosition.CharColumn</see> to match an editor or a Language
     /// Server Protocol client, which count columns in chars.
-    /// </remarks>
+    /// </summary>
     public int TokenColumn => SourcePositionConverter.ToTokenColumn(Input, CharIndex);
 
     /// <summary>

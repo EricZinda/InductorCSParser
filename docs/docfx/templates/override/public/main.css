@@ -60,6 +60,11 @@ article .api-declaration {
 article h3.api-declaration { margin-top: 2.25rem; }
 article h1.api-declaration { font-size: 1.35rem; }
 
+[data-bs-theme="dark"] article .api-declaration {
+  background-color: #3a4046;
+  border-color: #596169;
+}
+
 /* Greyer masthead text, like the Minimal Mistakes top bar. */
 .navbar .navbar-brand { font-weight: 700; }
 
