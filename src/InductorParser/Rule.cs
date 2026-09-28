@@ -284,14 +284,17 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Short-form trace helpers called from a rule's TryParse on the
-    /// success or failure path.
+    /// Writes a success line to the trace, at <see cref="Tracing.TraceLevel.Diagnostic">TraceLevel.Diagnostic</see>,
+    /// labeled with this rule's name. Call it from
+    /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>
+    /// on the success path, with an interpolated string saying what matched.
     /// </summary>
     /// <remarks>
-    /// [AggressiveInlining] + the
-    /// <see cref="InductorParser.Tracing.TraceInterpolatedStringHandler">TraceInterpolatedStringHandler</see> parameter together make trace
-    /// calls cost nothing when tracing is off. See
-    /// <see cref="InductorParser.Tracing.TraceInterpolatedStringHandler">TraceInterpolatedStringHandler</see> for the full story.
+    /// Costs nothing when tracing is off: the method is inlined, and the
+    /// <see cref="InductorParser.Tracing.TraceInterpolatedStringHandler">TraceInterpolatedStringHandler</see>
+    /// parameter skips building the string unless a trace sink is listening at this level. See
+    /// <see cref="InductorParser.Tracing.TraceInterpolatedStringHandler">TraceInterpolatedStringHandler</see>
+    /// for the full story.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceSuccess(
@@ -304,6 +307,17 @@ public abstract class Rule
         lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Success, formatted);
     }
 
+    /// <summary>
+    /// Writes a failure line to the trace, at <see cref="Tracing.TraceLevel.Diagnostic">TraceLevel.Diagnostic</see>,
+    /// labeled with this rule's name. Call it from
+    /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>
+    /// on the failure path, with an interpolated string saying what didn't match. If the rule has a
+    /// <see cref="Rule.WithError(string, bool)">Rule.WithError</see> message, it's appended to the line.
+    /// </summary>
+    /// <remarks>
+    /// Costs nothing when tracing is off, the same way
+    /// <see cref="TraceSuccess(Lexer, TraceInterpolatedStringHandler)">Rule.TraceSuccess</see> does.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceFailure(
         Lexer lexer,
@@ -316,8 +330,10 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Explicit-level overloads. Use when a trace should fire at a
-    /// level other than <see cref="Tracing.TraceLevel.Diagnostic">TraceLevel.Diagnostic</see> (e.g. a summary line at <see cref="Tracing.TraceLevel.Normal">TraceLevel.Normal</see>).
+    /// Same as <see cref="TraceSuccess(Lexer, TraceInterpolatedStringHandler)">Rule.TraceSuccess</see>,
+    /// but at the trace level you choose. Use it when a line should show at a level other than
+    /// <see cref="Tracing.TraceLevel.Diagnostic">TraceLevel.Diagnostic</see>, such as a summary line at
+    /// <see cref="Tracing.TraceLevel.Normal">TraceLevel.Normal</see>.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceSuccess(
@@ -331,6 +347,12 @@ public abstract class Rule
         lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Success, formatted);
     }
 
+    /// <summary>
+    /// Same as <see cref="TraceFailure(Lexer, TraceInterpolatedStringHandler)">Rule.TraceFailure</see>,
+    /// but at the trace level you choose. Use it when a line should show at a level other than
+    /// <see cref="Tracing.TraceLevel.Diagnostic">TraceLevel.Diagnostic</see>, such as a summary line at
+    /// <see cref="Tracing.TraceLevel.Normal">TraceLevel.Normal</see>.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceFailure(
         Lexer lexer,
@@ -403,14 +425,13 @@ public abstract class Rule
     /// BetweenInclusiveRule's bounds) into the label.
     /// </summary>
     /// <remarks>
-    /// ThrowIfSealed keeps the trace name a grammar-construction-time setting:
-    /// once the grammar is compiled and sealed, a rename throws rather than
-    /// silently changing the trace label, the <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">Rule.NameOf</see> fallback for an unnamed
-    /// rule, and diagnostic text under a live grammar. The constructor callers
-    /// run before <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> seals the rule, so they pass the check. Trace output
-    /// reads _ruleTraceName as a plain field load, so setting it stays a
-    /// one-time cost.
+    /// Call it from your constructor. Once the grammar is compiled this throws
+    /// InvalidOperationException, because the label is what trace output and
+    /// <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">Rule.NameOf</see>
+    /// show for an unnamed rule, and it shouldn't change under a live grammar.
     /// </remarks>
+    // Trace output reads _ruleTraceName as a plain field load, so setting it
+    // here is a one-time cost and nothing on the parse path pays for it.
     protected void SetTraceName(string name)
     {
         ThrowIfSealed();
@@ -1492,7 +1513,8 @@ public abstract class Rule
     /// <para>
     /// Rule.TryParse owns the outer transaction. It opens one before calling
     /// this method and commits it only when this method returns a non-null
-    /// Symbol, so a subclass never calls <see cref="InductorParser.Lexing.Lexer.BeginTransaction">Lexer.BeginTransaction</see> or Commit for its own
+    /// Symbol, so a subclass never calls <see cref="InductorParser.Lexing.Lexer.BeginTransaction">Lexer.BeginTransaction</see> or
+    /// <see cref="InductorParser.Lexing.Lexer.Transaction.Commit">Transaction.Commit</see> for its own
     /// outer scope and can't forget the commit. `startPosition` is the lexer
     /// position captured the moment that transaction opened. Use it for failure
     /// error positions and for the ReadOnlyMemory span of any Symbol you build.
@@ -1506,10 +1528,12 @@ public abstract class Rule
     /// <para>
     /// If your rule matches stored expected text, record failure positions only
     /// at whole-grapheme boundaries of that text: a partially matched grapheme
-    /// isn't progress. Canonical normalization changes a grapheme's rune count
-    /// but not its boundaries, so whole-grapheme positions come out the same
-    /// whichever form the grammar was compiled with, while rune-level
-    /// positions don't. LiteralRule's FailurePosition helper shows the pattern.
+    /// isn't progress. The failing grapheme is then the character the user would
+    /// point at, and its start maps cleanly back to the original input. A
+    /// mid-grapheme position (after matching the base letter of "à" but not its
+    /// accent, say, under FormD) only exists because of the normalization form,
+    /// and mapping it back lands inside a character the user typed. LiteralRule's
+    /// FailurePosition helper shows the pattern.
     /// See <a href="../docs/ErrorArchitecture.md#where-each-rule-records-its-failure">Where each rule records its failure</a>.
     /// </para>
     /// <para>
@@ -1622,22 +1646,22 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Helper for rules that have one fixed expected string. Tries to
-    /// convert `text` to `form`. Returns the normalized text on success.
+    /// Helper for a rule with one fixed expected string, for use from
+    /// <see cref="ValidateNormalization(NormalizationForm, INormalizationReporter)">Rule.ValidateNormalization</see>.
+    /// Converts <paramref name="text"/> to <paramref name="form"/> and returns the result. Store
+    /// that result as the rule's expected text, so at parse time it compares against input that
+    /// was normalized the same way.
     /// </summary>
     /// <remarks>
-    /// Text that can't be normalized (an unpaired surrogate, or U+FFFE,
-    /// the two things the rejection scan flags) is reported to the
-    /// reporter (which surfaces
-    /// it as the thrown exception's InnerException and records a matching
-    /// offender), and the method returns null. The scan runs before the
-    /// conversion because not every runtime's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> throws on
-    /// such text, and the catch stays as a backstop for anything a runtime
-    /// rejects beyond the scan. Callers that get a non-null result should
-    /// replace their stored expected text with it. This behavior makes
-    /// the rule's match-time view canonically equivalent to the user's
-    /// typed text under any form.
+    /// If <paramref name="text"/> can't be normalized (it contains an unpaired surrogate or
+    /// U+FFFE), this reports the problem to <paramref name="reporter"/> and returns null. Nothing
+    /// more is needed from the caller:
+    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> gathers
+    /// every report across the grammar and throws one InvalidOperationException at the end.
     /// </remarks>
+    // The scan runs before the conversion because not every runtime's
+    // string.Normalize throws on such text. The catch stays as a backstop for
+    // anything a runtime rejects beyond what the scan flags.
     protected static string? TryConvertToForm(
         Rule rule, string text,
         NormalizationForm form,
