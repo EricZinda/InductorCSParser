@@ -182,10 +182,18 @@ public abstract class Rule
     protected internal bool ErrorForced => _errorForced;
 
     /// <summary>
-    /// emitsLeaf is required (no default overload) so a new rule can't
+    /// The base constructor a user-defined <see cref="Rule"/> subclass calls from its own
+    /// constructor. Only rule writers ever call it, and only through <c>base(...)</c>: grammar
+    /// authors get their Rules from the factory methods on <see cref="Rules"/>. It sets the rule's
+    /// default <see cref="Rule.FlattenType">Rule.FlattenType</see> (which a grammar author can still
+    /// override with <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>), whether the rule
+    /// produces leaf Symbols, and its child rules.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="emitsLeaf"/> is required (no default overload) so a new rule can't
     /// silently get the wrong shape. See the <see cref="InductorParser.Rule.EmitsLeaf">Rule.EmitsLeaf</see> property for what
     /// it means and how to choose it.
-    /// </summary>
+    /// </remarks>
     protected Rule(FlattenType defaultFlatten, bool emitsLeaf, params Rule[]? children)
     {
         FlattenType = defaultFlatten;
@@ -1517,7 +1525,7 @@ public abstract class Rule
     protected abstract Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
 
     /// <summary>
-    /// Whether Rule.TryParse opens an automatic outer transaction around
+    /// Whether Rule.TryParse should open an automatic outer transaction around
     /// this rule's <see cref="Rule.TryParseRule">Rule.TryParseRule</see>. True for every rule that speculatively
     /// reads input, which is almost all of them: a rule that reads tokens
     /// and then fails must be able to roll back. EofRule and LateBoundRule
@@ -1526,18 +1534,14 @@ public abstract class Rule
     /// own transaction.
     /// </summary>
     /// <remarks>
-    /// A plain field, not a virtual property: Rule.TryParse reads it on
-    /// every rule invocation, so a virtual dispatch there would be
-    /// hot-path overhead. A field read plus a well-predicted branch is
-    /// effectively free.
-    /// <para>
-    /// `protected internal` so external Rule subclasses can also opt out
-    /// of the auto-managed transaction when they own their own probe /
-    /// transaction scope. The default (true) is what almost every shape
-    /// wants.
-    /// </para>
+    /// It's a plain field, so a subclass that owns its own probe or transaction scope
+    /// sets it to false in its constructor, the way EofRule and LateBoundRule do. The
+    /// default (true) is what almost every rule wants.
     /// </remarks>
-    protected internal bool OpensTransaction = true;
+    // A field, not a virtual property: Rule.TryParse reads it on every rule
+    // invocation, so a virtual dispatch there would be hot-path overhead. A
+    // field read plus a well-predicted branch is effectively free.
+    protected bool OpensTransaction = true;
 
     /// <summary>
     /// Helper for a rule to run an inner rule with the transaction and budget
