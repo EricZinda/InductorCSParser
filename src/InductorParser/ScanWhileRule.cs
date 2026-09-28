@@ -10,9 +10,9 @@ namespace InductorParser;
 // produces the same matched text but pays one transaction and one
 // per-token leaf Symbol for every token in the run, which the tree then
 // has to flatten away. ScanWhileRule opens one transaction at the
-// top, drops into lexer.AdvanceWhileRuneIn (rune-only sets) or
-// lexer.AdvanceWhileTokenIn (sets with multi-rune entries) for the
-// inner loop, and emits one leaf Symbol over the whole matched span.
+// top, drops into lexer.AdvanceWhileIn for the inner loop (which picks
+// the rune-only or grapheme-cluster walk from the set), and emits one
+// leaf Symbol over the whole matched span.
 //
 // minimumCount is the fewest tokens the run must have to succeed. The
 // default of 1 fails on an empty run. Passing 0 makes the rule always
@@ -70,13 +70,10 @@ internal sealed class ScanWhileRule : Rule
         // Lexer primitive instead of a loop of OneOfRule.TryParse calls:
         // one transaction and one Symbol allocation regardless of the
         // run's length, versus one of each per token in the OneOf form.
-        // Dispatch on whether the set has multi-rune entries: rune-only
-        // sets stay on the inline-rune fast path. Mixed sets pull a
-        // full token per iteration so a multi-rune token that's a
-        // member of the set can be part of the run.
-        int count = _set.HasMultiRuneGraphemes
-            ? lexer.AdvanceWhileTokenIn(_set)
-            : lexer.AdvanceWhileRuneIn(_set);
+        // AdvanceWhileIn keeps rune-only sets on the inline-rune fast
+        // path and pulls a full token per iteration for mixed sets, so a
+        // multi-rune token that's a member of the set can be part of the run.
+        int count = lexer.AdvanceWhileIn(_set);
         if (count < _minimumCount)
         {
             TraceFailure(lexer, $"count= {count}, wanted at least {_minimumCount} of '{_setRendered}'");

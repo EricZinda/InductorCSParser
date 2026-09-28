@@ -3,35 +3,40 @@ using InductorParser.Tracing;
 
 namespace InductorParser.Lexing;
 
-// Bulk-consume scanners exposed to ScanWhileRule and to user-defined
-// Rule subclasses. AdvanceWhileRuneIn walks one rune at a time and
-// checks each against a rune-only TokenSet. AdvanceWhileTokenIn walks
-// one grapheme cluster at a time so multi-rune entries (CRLF, ZWJ-glued
-// emoji sequences, etc.) can match too.
+// Bulk-consume scanner exposed to ScanWhileRule and to user-defined Rule
+// subclasses. The public AdvanceWhileIn picks between two internal loops:
+// AdvanceWhileRuneIn walks one rune at a time and checks each against a
+// rune-only TokenSet, and AdvanceWhileTokenIn walks one grapheme cluster
+// at a time so multi-rune entries (CRLF, ZWJ-glued emoji sequences, etc.)
+// can match too.
 public sealed partial class Lexer
 {
     /// <summary>
-    /// Consume tokens while each one is a single rune in <paramref name="set"/>.
-    /// Returns the number of tokens consumed.
+    /// Consume tokens while each one is in <paramref name="set"/>, and return the number of
+    /// tokens consumed. Stops at the first token that isn't in the set, or at the end of the
+    /// input, and leaves the cursor there. This is the bulk scanner behind
+    /// <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">Rules.ScanWhile</see>,
+    /// and a user-defined Rule that consumes a sequence of tokens can call it instead of looping over
+    /// <see cref="Read">Lexer.Read()</see>.
     /// </summary>
     /// <remarks>
-    /// <paramref name="set"/> must be rune-only. For a set that contains
-    /// multi-rune entries (CRLF, ZWJ emoji, etc.), use
-    /// <see cref="AdvanceWhileTokenIn">Lexer.AdvanceWhileTokenIn(TokenSet)</see> instead, or check
-    /// <see cref="TokenSet.HasMultiRuneGraphemes">TokenSet.HasMultiRuneGraphemes</see> yourself and call
-    /// whichever one fits.
+    /// Works for any set. A set with multi-rune entries (CRLF, a ZWJ emoji sequence) matches whole
+    /// grapheme clusters against those entries, and a rune-only set takes a faster path that skips
+    /// the multi-rune membership check. The parse budget is ticked once per token, so
+    /// <see cref="ParseOptions.Timeout">ParseOptions.Timeout</see> and the other limits can fire
+    /// mid-scan.
     /// </remarks>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="set"/> contains a multi-rune grapheme entry.
-    /// </exception>
-    public int AdvanceWhileRuneIn(TokenSet set)
+    public int AdvanceWhileIn(TokenSet set) =>
+        set.HasMultiRuneGraphemes ? AdvanceWhileTokenIn(set) : AdvanceWhileRuneIn(set);
+
+    // The rune-only loop behind AdvanceWhileIn. Consumes tokens while each
+    // one is a single rune in `set` and returns the count. The set must be
+    // rune-only: AdvanceWhileIn routes sets with multi-rune entries to
+    // AdvanceWhileTokenIn, and nothing else calls this.
+    internal int AdvanceWhileRuneIn(TokenSet set)
     {
-        if (set.HasMultiRuneGraphemes)
-            throw new ArgumentException(
-                "AdvanceWhileRuneIn requires a rune-only set. " +
-                "For a set with multi-rune entries, use AdvanceWhileTokenIn instead, " +
-                "or check set.HasMultiRuneGraphemes yourself and call whichever one fits.",
-                nameof(set));
+        Invariant.That(!set.HasMultiRuneGraphemes,
+            $"AdvanceWhileRuneIn was handed a set with multi-rune entries: {set}");
 
         int count = 0;
 
@@ -85,17 +90,12 @@ public sealed partial class Lexer
         return count;
     }
 
-    /// <summary>
-    /// Consume tokens while each one is in <paramref name="set"/>,
-    /// matching either rune or multi-rune grapheme entries. Returns
-    /// the number of tokens consumed.
-    /// </summary>
-    /// <remarks>
-    /// For rune-only sets, <see cref="AdvanceWhileRuneIn">Lexer.AdvanceWhileRuneIn(TokenSet)</see> is faster
-    /// (it can skip the multi-rune membership check). Branch on
-    /// <see cref="TokenSet.HasMultiRuneGraphemes">TokenSet.HasMultiRuneGraphemes</see> to pick.
-    /// </remarks>
-    public int AdvanceWhileTokenIn(TokenSet set)
+    // The grapheme-cluster loop behind AdvanceWhileIn. Consumes tokens while
+    // each one is in `set`, matching either rune or multi-rune grapheme
+    // entries, and returns the count. Works for any set, but AdvanceWhileIn
+    // sends rune-only sets to AdvanceWhileRuneIn, which skips the multi-rune
+    // membership check.
+    internal int AdvanceWhileTokenIn(TokenSet set)
     {
         int count = 0;
         while (_position < _endPosition)
