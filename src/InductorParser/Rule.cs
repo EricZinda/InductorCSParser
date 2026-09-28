@@ -140,9 +140,10 @@ public abstract class Rule
     /// </summary>
     /// <remarks>
     /// Virtual so a rule that stands in for another rule can report that
-    /// rule's value: <see cref="LateBoundRule"/> reports its bound
-    /// target's, and an unnamed AliasRule reports its inner's. Neither has
-    /// a flatten policy of its own in that state.
+    /// rule's value instead of its own. <see cref="LateBoundRule"/> always reports its bound
+    /// target's. An alias reports its inner's until it's named with
+    /// <see cref="Rule.As(string)">Rule.As</see>, at which point it stops forwarding and gets a policy
+    /// of its own.
     /// </remarks>
     public virtual FlattenType FlattenType
     {
@@ -545,7 +546,9 @@ public abstract class Rule
     ///     var year  = digitSequence.AliasedAs("year");
     ///     var month = digitSequence.AliasedAs("month");
     /// </code>
-    /// The alias's Symbol replaces its Symbol rather than nesting it. 
+    /// In the parse tree, a match of <c>year</c> shows up as one node named year, not as a year
+    /// node with a digitSequence node inside it. The alias's node takes the place of this rule's
+    /// node rather than wrapping it.
     /// <para>
     /// The substitution only happens on a successful match, so it doesn't affect
     /// error reporting. A <see cref="Rule.WithError">Rule.WithError</see> on this rule (the one being aliased) records
