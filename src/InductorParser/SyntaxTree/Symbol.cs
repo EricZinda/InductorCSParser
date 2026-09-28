@@ -27,6 +27,7 @@ public sealed class Symbol
     private static readonly IReadOnlyList<Symbol> EmptyChildren = Array.Empty<Symbol>();
 
     /// <summary>
+    /// For authors implementing new <see cref="Rule"/> subclasses. Grammar authors never need to use this directly.
     /// The Symbol a rule returns from TryParse to mean "matched successfully, contributes
     /// nothing" when its effective <see cref="FlattenType">Symbol.FlattenType</see> is Delete. A rule needs a non-null
     /// value to signal success (null means failure), and this is the value the tree then drops.
@@ -103,10 +104,10 @@ public sealed class Symbol
     /// </summary>
     /// <remarks>
     /// <paramref name="consumedSpan"/> is every character the rule matched, including ones that
-    /// never make it into the tree (<see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> children filtered out of
-    /// <see cref="Children">Symbol.Children</see>), so <see cref="SourceRange">Symbol.SourceRange</see> / <see cref="SourceText">Symbol.SourceText</see> report
-    /// the full match. For a zero-width match, pass a zero-length memory at the rule's anchor
-    /// offset so callers still get a position.
+    /// never make it into the tree (i.e. <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> children filtered out of
+    /// <see cref="Children">Symbol.Children</see>), so that <see cref="SourceRange">Symbol.SourceRange</see> / <see cref="SourceText">Symbol.SourceText</see> report
+    /// the full match. If the rule succeeds without consuming any characters, pass a zero-length
+    /// portion of the input at the position where it matched, so callers can still locate the match.
     /// <para>
     /// The two optional parameters are what make the position and naming members work. Leave
     /// <paramref name="consumedSpan"/> at its default and <see cref="SourceRange">Symbol.SourceRange</see> returns
@@ -149,22 +150,23 @@ public sealed class Symbol
     /// <see cref="Rules.Literal">Rules.Literal</see>, and <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see> do,
     /// hands its match back from
     /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>
-    /// as a leaf Symbol (returned when the effective flatten type is
-    /// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>, appended to
-    /// <c>outputSymbols</c> when it's <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>),
-    /// and this is how it builds that leaf: pass the rule's own <see cref="Rule.Id">Rule.Id</see> and
-    /// <see cref="Rule.FlattenType">Rule.FlattenType</see>, the matched text as a view into the lexer's input
-    /// (<see cref="InductorParser.Lexing.Token.Memory">Token.Memory</see> from the token the lexer read, or
-    /// <c>lexer.Input.AsMemory(startPosition, length)</c>), and the lexer's
+    /// as a leaf Symbol. To build it, pass the rule's <see cref="Rule.Id">Rule.Id</see> and
+    /// <see cref="Rule.FlattenType">Rule.FlattenType</see>, the portion of the input that matched,
+    /// and the lexer's
     /// <see cref="InductorParser.Lexing.Lexer.Context">Lexer.Context</see>. The other use is building a
     /// tree by hand outside any parse (tests, or a tool that synthesizes Symbols), which is why
     /// <paramref name="context"/> can be null.
     /// </summary>
     /// <remarks>
     /// Leave <paramref name="context"/> null and <see cref="DisplayName">Symbol.DisplayName</see> returns null and
-    /// <see cref="Is(string)">Symbol.Is(string)</see> returns false. <see cref="SourceRange">Symbol.SourceRange</see> and
-    /// <see cref="SourceText">Symbol.SourceText</see> still work as long as <paramref name="leafChars"/> points into a
-    /// string, and they treat that string as the original input.
+    /// <see cref="Is(string)">Symbol.Is(string)</see> returns false.
+    /// <see cref="SourceRange">Symbol.SourceRange</see> and <see cref="SourceText">Symbol.SourceText</see>
+    /// still work if <paramref name="leafChars"/> was created from a string using
+    /// <c>input.AsMemory(start, length)</c>. The Symbol uses that string as its source:
+    /// positions are measured from the beginning of the string, and the source text is the selected portion.
+    /// For example, <c>"hello".AsMemory(1, 3)</c> gives source text <c>"ell"</c>, starting at
+    /// character index 1 and ending just before index 4. To keep positions relative to the original
+    /// input, call <c>AsMemory</c> on that input string rather than on a copied substring.
     /// </remarks>
     /// <param name="id">The id of the rule producing this Symbol.</param>
     /// <param name="flattenType">How this Symbol participates in flattening.</param>
