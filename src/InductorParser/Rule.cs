@@ -18,23 +18,20 @@ namespace InductorParser;
 /// </summary>
 /// <remarks>
 /// Rules are instances, not types. In C# you build a Rule by calling factory
-/// functions (<see cref="Rules.And">Rules.And</see>, <see cref="Rules.Or">Rules.Or</see>, <see cref="Rules.Token(char)">Rules.Token</see>, etc.) on the Rules class that return Rule instances. The tree is
+/// functions (<see cref="Rules.And">Rules.And</see>, <see cref="Rules.Or">Rules.Or</see>, <see cref="Rules.Token(char)">Rules.Token</see>, etc.) on the <see cref="Rules"/> class that return Rule instances. The tree is
 /// built at runtime, compiled once, and reused for every parse after that. A
 /// grammar can live anywhere a reference can live: a local variable, a static
 /// field, an entry in a dictionary, an argument passed around.
 /// <para>
-/// Rule construction is fluent. Modifier methods like <see cref="Rule.As(string)">Rule.As</see>(name) and
-/// <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(type) return the same Rule so it can read as a chain:
+/// Rule construction is fluent. Modifier methods like <see cref="Rule.As(string)">Rule.As</see>(name),
+/// <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(type), and
+/// <see cref="Rule.WithError(string, bool)">Rule.WithError</see>(message) return the same Rule so the calls
+/// read as a chain:
 /// <code>
 ///     var settingName = OneOrMore(OneOf(TokenSet.Letters))
-///         .As(nameof(settingName));
+///         .As(nameof(settingName))
+///         .WithError("Expected a setting name");
 /// </code>
-/// <see cref="Rule.As(string)">Rule.As</see>(name) silently flips the rule's <see cref="Rule.FlattenType">Rule.FlattenType</see> to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> if it hasn't
-/// been set explicitly, so a named rule is findable by <see cref="InductorParser.SyntaxTree.Symbol.Find(InductorParser.SyntaxTree.SymbolId)">Symbol.Find</see> without the
-/// caller adding <see cref="Rule.Preserve">Rule.Preserve</see>() by hand. <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>) after <see cref="Rule.As(string)">Rule.As</see> (or <see cref="Rule.As(string)">Rule.As</see>
-/// after <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>)) throws, since the two requests contradict each
-/// other: a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> rule's Symbol doesn't reach the tree, so naming it for
-/// Find is meaningless.
 /// </para>
 /// <para>
 /// Rules are effectively immutable. Before <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> runs, you can call the
