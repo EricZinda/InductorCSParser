@@ -1,4 +1,5 @@
-{{!Override of the modern template's class.header. One change from stock: the
+{{!Override of the modern template's class.header. Declarations appear in the
+   heading rather than a repeated code block. Also, the
    type's own name (the last entry in the Inheritance chain) is moved inside the
    inheritance-list conditional. Stock renders that name whenever the page is a class,
    even when the inheritance list is empty, so once our extension script clears
@@ -8,7 +9,8 @@
    pair would end the comment early and dump the rest of it onto the page.}}
 
 <h1 id="{{id}}" data-uid="{{uid}}" class="text-break">
-  {{>partials/title}}
+  {{#declarationHeading}}{{declarationHeading}}{{/declarationHeading}}
+  {{^declarationHeading}}{{>partials/title}}{{/declarationHeading}}
   {{#sourceurl}}<a class="header-action link-secondary" title="View source" href="{{sourceurl}}"><i class="bi bi-code-slash"></i></a>{{/sourceurl}}
 </h1>
 

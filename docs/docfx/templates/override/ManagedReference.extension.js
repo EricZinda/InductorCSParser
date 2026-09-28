@@ -74,13 +74,13 @@ function walk(node) {
     return;
   }
   if (node.syntax) {
-    // Put the complete callable declaration in its heading, including parameter
-    // names, defaults, modifiers, and generic constraints. Keep the UID/id and
-    // parameter documentation intact so links and descriptions still work.
+    // Show declarations once, in the heading. Preserve names and IDs for page
+    // titles, inheritance lists, navigation, and links.
     var memberType = String(node.type || "").toLowerCase();
-    if (memberType === "method" || memberType === "constructor" || memberType === "operator") {
+    if (["method", "constructor", "operator", "property", "class", "struct",
+         "interface", "enum", "delegate"].indexOf(memberType) !== -1) {
       if (node.syntax.content && node.syntax.content.length) {
-        node.name = node.syntax.content;
+        node.declarationHeading = node.syntax.content[0].value;
         node.syntax.content = [];
       }
     }
