@@ -37,19 +37,24 @@ public enum ParseOutcome
     /// <summary>
     /// The input couldn't be normalized to the grammar's
     /// <see cref="Rule.NormalizationForm">Rule.NormalizationForm</see> because it isn't well-formed
-    /// Unicode (an unpaired UTF-16 surrogate, or U+FFFE). The grammar never
+    /// Unicode (one that contains an unpaired UTF-16 surrogate, or U+FFFE). The grammar never
     /// ran, so this is distinct from <see cref="GrammarMismatch">ParseOutcome.GrammarMismatch</see>: the input
     /// is broken at the encoding level, not merely unrecognized.
     /// </summary>
     /// <remarks>
-    /// <see cref="ParseResult.ErrorCharIndex">ParseResult.ErrorCharIndex</see> points at the offending
-    /// character and <see cref="ParseResult.ErrorMessage">ParseResult.ErrorMessage</see> is the
+    /// <see cref="ParseResult.ErrorPosition">ParseResult.ErrorPosition</see> gives the offending character's location,
+    /// also available through <see cref="ParseResult.ErrorCharIndex">ParseResult.ErrorCharIndex</see>,
+    /// <see cref="ParseResult.ErrorTokenIndex">ParseResult.ErrorTokenIndex</see>,
+    /// <see cref="ParseResult.ErrorLine">ParseResult.ErrorLine</see>,
+    /// <see cref="ParseResult.ErrorCharColumn">ParseResult.ErrorCharColumn</see>, and
+    /// <see cref="ParseResult.ErrorTokenColumn">ParseResult.ErrorTokenColumn</see>.
+    /// <see cref="ParseResult.ErrorMessage">ParseResult.ErrorMessage</see> is the
     /// message rendered from <see cref="ParseOptions.MalformedInputTemplate">ParseOptions.MalformedInputTemplate</see>,
     /// so a non-English app can localize it the same way it localizes every
     /// other failure. Only reachable when the grammar was compiled with a
     /// normalization form (the default). <c><see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(null)</see></c> skips
     /// normalization and surfaces ill-formed code units as ordinary tokens
-    /// instead, which a grammar can decide how to handle
+    /// instead. The grammar can accept or reject those tokens. Rejecting them produces
     /// <see cref="GrammarMismatch">ParseOutcome.GrammarMismatch</see>.
     /// </remarks>
     MalformedInput,
