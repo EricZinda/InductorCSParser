@@ -340,14 +340,38 @@ public sealed class Symbol
     /// characters they matched don't appear in the result. <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see> Symbols are gone
     /// too, but their children were lifted into the parent, so the characters those children
     /// matched do still appear. To get the exact input verbatim, keep the string you passed to
-    /// Parse, read <see cref="SourceText">Symbol.SourceText</see>, or set <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> to keep every
-    /// grammar node (including <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> ones) in the tree.
+    /// <see cref="Rule.Parse(string)">Rule.Parse(string)</see> or read <see cref="SourceText">Symbol.SourceText</see>
+    /// for the original text matched by this Symbol.
+    /// <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> keeps
+    /// deleted nodes in the debug tree, but their text may still have been normalized.
     /// <para>
     /// When the grammar normalized the input (any form other than <c><see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(null)</see></c>), a leaf's
     /// text comes from the normalized parse input, so this renders the normalized form the parser
     /// matched, not the user's original spelling. <see cref="SourceText">Symbol.SourceText</see> returns the original.
     /// </para>
     /// </remarks>
+    /// <example>
+    /// The parentheses are required by the grammar but deleted from the tree. The repetition
+    /// is flattened, so its letters become children of the enclosing Symbol.
+    /// <code>
+    /// using static InductorParser.Rules;
+    ///
+    /// var grammar = And(
+    ///     Token('(').Delete(),
+    ///     OneOrMore(OneOf(TokenSet.Letters)).Flatten(),
+    ///     Token(')').Delete()
+    /// ).As("word").Preserve();
+    ///
+    /// var symbol = grammar.Parse("(hello)").Tree!;
+    /// Console.WriteLine(symbol.ToString());
+    /// Console.WriteLine(symbol.SourceText);
+    /// </code>
+    /// Output:
+    /// <code language="text">
+    /// hello
+    /// (hello)
+    /// </code>
+    /// </example>
     public override string ToString()
     {
         if (_isLeaf) return _leafChars.ToString();
