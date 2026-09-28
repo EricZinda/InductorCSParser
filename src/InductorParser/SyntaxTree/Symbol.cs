@@ -248,7 +248,9 @@ public sealed class Symbol
     public string? DisplayName => _context?.GrammarRoot?.NameOf(Id);
 
     /// <summary>
-    /// Depth-first search for the first Symbol produced by <paramref name="rule"/>.
+    /// Searches this Symbol and all its descendants for the first Symbol produced by <paramref name="rule"/>,
+    /// or returns null if none matches. Checks this Symbol first, then searches its children recursively
+    /// in order. Doesn't search parents or siblings of this Symbol.
     /// See <see cref="Find(SymbolId)">Symbol.Find(SymbolId)</see>.
     /// </summary>
     public Symbol? Find(Rule rule)
@@ -258,8 +260,10 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Depth-first search for the first Symbol whose <see cref="Id">Symbol.Id</see> matches, or null if none
-    /// does. Use when you expect exactly one match, such as a named rule that appears once at a
+    /// Searches this Symbol and all its descendants for the first Symbol whose <see cref="Id">Symbol.Id</see>
+    /// matches, or returns null if none does. Checks this Symbol first, then searches its children recursively
+    /// in order. Doesn't search parents or siblings of this Symbol.
+    /// Use when you expect exactly one match, such as a named rule that appears once at a
     /// known position in the grammar.
     /// </summary>
     public Symbol? Find(SymbolId id)
@@ -274,7 +278,9 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Depth-first search yielding every Symbol produced by <paramref name="rule"/>.
+    /// Searches this Symbol and all its descendants, yielding every Symbol produced by <paramref name="rule"/>.
+    /// Checks this Symbol first, then searches its children recursively in order.
+    /// Doesn't search parents or siblings of this Symbol.
     /// See <see cref="FindAll(SymbolId)">Symbol.FindAll(SymbolId)</see>.
     /// </summary>
     public IEnumerable<Symbol> FindAll(Rule rule)
@@ -284,7 +290,9 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Depth-first search yielding every Symbol whose <see cref="Id">Symbol.Id</see> matches. Use when the rule
+    /// Searches this Symbol and all its descendants, yielding every Symbol whose <see cref="Id">Symbol.Id</see> matches.
+    /// Checks this Symbol first, then searches its children recursively in order.
+    /// Doesn't search parents or siblings of this Symbol. Use when the rule
     /// can appear multiple times (repetitions, alternations, recursive grammars).
     /// </summary>
     public IEnumerable<Symbol> FindAll(SymbolId id)
