@@ -15,7 +15,7 @@
 {{/overload}}
 
 <h3 id="{{id}}" data-uid="{{uid}}" class="api-declaration">
-  {{#declarationHeading}}{{declarationHeading}}{{/declarationHeading}}
+  {{#declarationHeading}}{{{declarationHeading}}}{{/declarationHeading}}
   {{^declarationHeading}}{{name.0.value}}{{/declarationHeading}}
   {{#sourceurl}}<a class="header-action link-secondary" title="View source" href="{{sourceurl}}"><i class="bi bi-code-slash"></i></a>{{/sourceurl}}
 </h3>

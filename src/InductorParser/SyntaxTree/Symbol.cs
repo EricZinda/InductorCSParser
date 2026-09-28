@@ -14,7 +14,7 @@ namespace InductorParser.SyntaxTree;
 /// A Symbol has one of two shapes. A composite has a list of child Symbols and comes from
 /// rules that build structure (<see cref="Rules.And">Rules.And</see>, <see cref="Rules.Or">Rules.Or</see>, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see>). A leaf stores a section of the original
 /// input (a ReadOnlyMemory&lt;char&gt;) and comes from rules that match content (<see cref="Rules.Token(char)">Rules.Token</see>, <see cref="Rules.Literal">Rules.Literal</see>,
-/// <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see>). The parse never copies input into a new string.
+/// <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see>).
 /// <para>
 /// A Symbol can also report where in the source it came from. <see cref="SourceRange">Symbol.SourceRange</see> returns
 /// a Start/End pair of <see cref="SourcePosition"/>s in the same char / token / line / column
@@ -86,7 +86,20 @@ public sealed class Symbol
     public IReadOnlyList<Symbol> Children { get; }
 
     /// <summary>
-    /// Builds a composite Symbol with child Symbols.
+    /// Builds a composite Symbol with child Symbols. If you're writing a grammar out of the
+    /// built-in rules you never call this: <see cref="Rule.Parse(string)">Rule.Parse(string)</see>
+    /// builds the whole tree for you. It's for rule writers. A user-defined <see cref="Rule"/>
+    /// subclass that has run its child rules and matched some input has to hand a Symbol back
+    /// from <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>
+    /// when its effective flatten type is <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>,
+    /// and this is how it builds that node: pass the rule's own <see cref="Rule.Id">Rule.Id</see> and
+    /// <see cref="Rule.FlattenType">Rule.FlattenType</see>, the child Symbols the match produced, the
+    /// input the match covered (<c>lexer.Input.AsMemory(startPosition, length)</c>), and the lexer's
+    /// <see cref="InductorParser.Lexing.Lexer.Context">Lexer.Context</see>. Inside a rule, prefer
+    /// <see cref="Rule.CreateCompositeFromOwnedChildren">Rule.CreateCompositeFromOwnedChildren</see>,
+    /// which fills in the id and flatten type and skips the copy of the children list this
+    /// constructor makes. The other use is building a tree by hand outside any parse (tests, or a
+    /// tool that synthesizes Symbols), which is why <paramref name="context"/> can be null.
     /// </summary>
     /// <remarks>
     /// <paramref name="consumedSpan"/> is every character the rule matched, including ones that
@@ -94,12 +107,19 @@ public sealed class Symbol
     /// <see cref="Children">Symbol.Children</see>), so <see cref="SourceRange">Symbol.SourceRange</see> / <see cref="SourceText">Symbol.SourceText</see> report
     /// the full match. For a zero-width match, pass a zero-length memory at the rule's anchor
     /// offset so callers still get a position.
+    /// <para>
+    /// The two optional parameters are what make the position and naming members work. Leave
+    /// <paramref name="consumedSpan"/> at its default and <see cref="SourceRange">Symbol.SourceRange</see> returns
+    /// null and <see cref="SourceText">Symbol.SourceText</see> returns the empty string. Leave
+    /// <paramref name="context"/> null and <see cref="DisplayName">Symbol.DisplayName</see> returns null and
+    /// <see cref="Is(string)">Symbol.Is(string)</see> returns false.
+    /// </para>
     /// </remarks>
     /// <param name="id">The id of the rule producing this Symbol.</param>
     /// <param name="flattenType">How this Symbol participates in flattening.</param>
     /// <param name="children">The child Symbols. Null or empty collapses to a shared empty list.</param>
     /// <param name="consumedSpan">The parse-input section the match covered.</param>
-    /// <param name="context">The per-parse context, or null for a hand-built Symbol.</param>
+    /// <param name="context">The lexer's per-parse context, or null for a hand-built Symbol.</param>
     public Symbol(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol>? children, ReadOnlyMemory<char> consumedSpan = default, ParseContext? context = null)
         : this(id, flattenType, CopyChildren(children), consumedSpan, context, true)
     {
@@ -122,12 +142,34 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Builds a leaf Symbol whose matched text points into the parse input.
+    /// Builds a leaf Symbol whose matched text points into the parse input. If you're writing a
+    /// grammar out of the built-in rules you never call this: <see cref="Rule.Parse(string)">Rule.Parse(string)</see>
+    /// builds the whole tree for you. It's for rule writers. A user-defined <see cref="Rule"/>
+    /// subclass that matches content directly, the way the built-in <see cref="Rules.Token(char)">Rules.Token</see>,
+    /// <see cref="Rules.Literal">Rules.Literal</see>, and <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see> do,
+    /// hands its match back from
+    /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>
+    /// as a leaf Symbol (returned when the effective flatten type is
+    /// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>, appended to
+    /// <c>outputSymbols</c> when it's <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>),
+    /// and this is how it builds that leaf: pass the rule's own <see cref="Rule.Id">Rule.Id</see> and
+    /// <see cref="Rule.FlattenType">Rule.FlattenType</see>, the matched text as a view into the lexer's input
+    /// (<see cref="InductorParser.Lexing.Token.Memory">Token.Memory</see> from the token the lexer read, or
+    /// <c>lexer.Input.AsMemory(startPosition, length)</c>), and the lexer's
+    /// <see cref="InductorParser.Lexing.Lexer.Context">Lexer.Context</see>. The other use is building a
+    /// tree by hand outside any parse (tests, or a tool that synthesizes Symbols), which is why
+    /// <paramref name="context"/> can be null.
     /// </summary>
+    /// <remarks>
+    /// Leave <paramref name="context"/> null and <see cref="DisplayName">Symbol.DisplayName</see> returns null and
+    /// <see cref="Is(string)">Symbol.Is(string)</see> returns false. <see cref="SourceRange">Symbol.SourceRange</see> and
+    /// <see cref="SourceText">Symbol.SourceText</see> still work as long as <paramref name="leafChars"/> points into a
+    /// string, and they treat that string as the original input.
+    /// </remarks>
     /// <param name="id">The id of the rule producing this Symbol.</param>
     /// <param name="flattenType">How this Symbol participates in flattening.</param>
     /// <param name="leafChars">The matched text, pointing into the parse input.</param>
-    /// <param name="context">The per-parse context, or null for a hand-built Symbol.</param>
+    /// <param name="context">The lexer's per-parse context, or null for a hand-built Symbol.</param>
     public Symbol(SymbolId id, FlattenType flattenType, ReadOnlyMemory<char> leafChars, ParseContext? context = null)
     {
         Id = id;
