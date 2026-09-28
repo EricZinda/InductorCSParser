@@ -11,17 +11,23 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 /// <summary>
-/// The base of everything in a grammar. A grammar is a tree of Rule objects:
-/// composites like <see cref="Rules.And">Rules.And</see>/<see cref="Rules.Or">Rules.Or</see>/<see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see> hold other Rules, leaves like <see cref="Rules.Token(char)">Rules.Token</see>/<see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>
-/// sit at the bottom, and the root is whatever Rule you hand to <see cref="Rule.Parse(string)">Rule.Parse</see>().
-/// Calling <see cref="Rule.Parse(string)">Rule.Parse</see> on the root walks the tree and tries to match the input.
+/// The base class of every rule in a grammar. To build a grammar, start at <see cref="Rules"/>:
+/// its factory methods (<see cref="Rules.And">Rules.And</see>, <see cref="Rules.Or">Rules.Or</see>,
+/// <see cref="Rules.Token(char)">Rules.Token</see>, and the rest) return ready-made Rule instances, and
+/// you never need to use Rule directly unless you're writing a custom rule by subclassing it. What
+/// you do call on those instances, <see cref="Rule.Parse(string)">Rule.Parse</see> and the modifiers
+/// like <see cref="Rule.As(string)">Rule.As</see> and <see cref="Rule.WithError(string, bool)">Rule.WithError</see>,
+/// is documented on this page.
 /// </summary>
 /// <remarks>
-/// Rules are instances, not types. In C# you build a Rule by calling factory
-/// functions (<see cref="Rules.And">Rules.And</see>, <see cref="Rules.Or">Rules.Or</see>, <see cref="Rules.Token(char)">Rules.Token</see>, etc.) on the <see cref="Rules"/> class that return Rule instances. The tree is
-/// built at runtime, compiled once, and reused for every parse after that. A
-/// grammar can live anywhere a reference can live: a local variable, a static
-/// field, an entry in a dictionary, an argument passed around.
+/// A grammar is a tree of Rule objects: composites like <see cref="Rules.And">Rules.And</see>,
+/// <see cref="Rules.Or">Rules.Or</see>, and <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see>
+/// hold other Rules, leaves like <see cref="Rules.Token(char)">Rules.Token</see> and
+/// <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see> sit at the bottom, and the root
+/// is whatever Rule you hand to <see cref="Rule.Parse(string)">Rule.Parse</see>, which walks the tree and
+/// tries to match the input. Rules are instances, not types: the tree is built at runtime, compiled
+/// once, and reused for every parse after that. A grammar can live anywhere a reference can live: a
+/// local variable, a static field, an entry in a dictionary, an argument passed around.
 /// <para>
 /// Rule construction is fluent. Modifier methods like <see cref="Rule.As(string)">Rule.As</see>(name),
 /// <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>(type), and
@@ -147,21 +153,23 @@ public abstract class Rule
     private FlattenType _declaredFlattenType;
 
     /// <summary>
-    /// The <see cref="Rule.FlattenType">Rule.FlattenType</see> stored on this rule itself, bypassing a getter
-    /// override that forwards another rule's value. Rules that don't
-    /// override <see cref="FlattenType">Rule.FlattenType</see> can ignore this: for them the
-    /// two are the same value.
+    /// The flatten policy this rule was given: its constructor default, or whatever
+    /// <see cref="Rule.Flatten(SyntaxTree.FlattenType)">Rule.Flatten</see>, <see cref="Rule.Preserve">Rule.Preserve</see>(),
+    /// or <see cref="Rule.Delete">Rule.Delete</see>() changed it to. For most rules this is the same as
+    /// <see cref="Rule.FlattenType">Rule.FlattenType</see>, and a rule that doesn't override
+    /// <see cref="Rule.FlattenType">Rule.FlattenType</see> can ignore it.
     /// </summary>
     /// <remarks>
-    /// A rule that stands in for another rule (an unnamed AliasRule
-    /// forwarding its inner) overrides the <see cref="Rule.FlattenType">Rule.FlattenType</see> getter, and then
-    /// needs this to read what was set on the rule itself. <see cref="Rule.As(string)">Rule.As</see>(...) reads
-    /// it (via ApplyIdentificationFlattenPolicy) to decide whether it
-    /// still needs to flip the policy to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>: on an unnamed alias
-    /// over a <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> inner the virtual getter already reports <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>
-    /// while the alias's own policy is still <see cref="SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>, and skipping the
-    /// flip there would leave the alias transparent with a dead name.
+    /// A rule that forwards to another rule (<see cref="LateBoundRule"/>, an unnamed alias) overrides
+    /// <see cref="Rule.FlattenType">Rule.FlattenType</see> to report the other rule's policy. This property
+    /// is how such a rule, and <see cref="Rule.As(string)">Rule.As</see> when naming it, still see the policy
+    /// set on the rule itself.
     /// </remarks>
+    // Rule.As reads this (in ApplyIdentificationFlattenPolicy) rather than the
+    // virtual FlattenType: an unnamed alias over a Preserve inner already reports
+    // Preserve through the override while its own policy is still Flatten, and
+    // skipping the Preserve flip there would leave the alias transparent with a
+    // name that never reaches the tree.
     protected FlattenType DeclaredFlattenType => _declaredFlattenType;
 
     /// <summary>
@@ -177,7 +185,9 @@ public abstract class Rule
     /// <summary>
     /// True when the message was set via <see cref="Rule.WithError">Rule.WithError</see>("...", forced: true). A
     /// forced failure is a hard override: it beats every non-forced failure at
-    /// any depth (and loses only to a deeper forced failure).
+    /// any depth (and loses only to a deeper forced failure). See
+    /// <a href="../docs/ErrorArchitecture.md#what-forced-is-for">What forced is for</a> in the
+    /// Error Reporting Architecture doc.
     /// </summary>
     protected internal bool ErrorForced => _errorForced;
 
