@@ -267,6 +267,23 @@ public readonly struct ParseResult
     /// has one element, prints that. Otherwise prints each top-level Symbol in
     /// order.
     /// </summary>
+    /// <example>
+    /// Shows node names, matched text, and indentation for child nodes.
+    /// <code>
+    /// using static InductorParser.Rules;
+    ///
+    /// var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Preserve();
+    /// var result = word.Parse("hi");
+    /// Console.Write(result.PrintTree());
+    /// </code>
+    /// Output:
+    /// <code language="text">
+    /// word: "hi"
+    ///   'h'
+    ///   'i'
+    /// </code>
+    /// Unlike <see cref="ToDebugString">ParseResult.ToDebugString()</see>, this doesn't include the parse outcome.
+    /// </example>
     public string PrintTree()
     {
         if (_symbols == null || _grammar == null) return string.Empty;
@@ -290,6 +307,20 @@ public readonly struct ParseResult
     /// tree-shaped debug rendering, use <see cref="PrintTree">ParseResult.PrintTree()</see> or
     /// <see cref="ToDebugString">ParseResult.ToDebugString()</see>.
     /// </remarks>
+    /// <example>
+    /// Returns just the surviving text, without node names or a parse outcome.
+    /// <code>
+    /// using static InductorParser.Rules;
+    ///
+    /// var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Preserve();
+    /// var result = word.Parse("hi");
+    /// Console.WriteLine(result.ToString());
+    /// </code>
+    /// Output:
+    /// <code language="text">
+    /// hi
+    /// </code>
+    /// </example>
     public override string ToString()
     {
         if (_symbols == null || _symbols.Count == 0) return string.Empty;
@@ -311,6 +342,23 @@ public readonly struct ParseResult
     /// Read <see cref="Outcome">ParseResult.Outcome</see>, <see cref="Tree">ParseResult.Tree</see>, and
     /// <see cref="ErrorMessage">ParseResult.ErrorMessage</see> directly rather than parsing this string.
     /// </remarks>
+    /// <example>
+    /// Adds the parse outcome to the tree shown by <see cref="PrintTree">ParseResult.PrintTree()</see>.
+    /// <code>
+    /// using static InductorParser.Rules;
+    ///
+    /// var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Preserve();
+    /// var result = word.Parse("hi");
+    /// Console.Write(result.ToDebugString());
+    /// </code>
+    /// Output:
+    /// <code language="text">
+    /// Success:
+    /// word: "hi"
+    ///   'h'
+    ///   'i'
+    /// </code>
+    /// </example>
     public string ToDebugString()
     {
         if (Outcome == ParseOutcome.NotRun)

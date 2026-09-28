@@ -24,9 +24,13 @@ public enum ParseOutcome
     /// budget tripped, no cancellation, the grammar just rejected the input.
     /// </summary>
     /// <remarks>
-    /// <see cref="ParseResult.ErrorMessage">ParseResult.ErrorMessage</see> and
-    /// <see cref="ParseResult.ErrorCharIndex">ParseResult.ErrorCharIndex</see> have the deepest-failure
-    /// details.
+    /// <see cref="ParseResult.ErrorMessage">ParseResult.ErrorMessage</see> describes the deepest failure.
+    /// <see cref="ParseResult.ErrorPosition">ParseResult.ErrorPosition</see> gives its location, also available through
+    /// <see cref="ParseResult.ErrorCharIndex">ParseResult.ErrorCharIndex</see>,
+    /// <see cref="ParseResult.ErrorTokenIndex">ParseResult.ErrorTokenIndex</see>,
+    /// <see cref="ParseResult.ErrorLine">ParseResult.ErrorLine</see>,
+    /// <see cref="ParseResult.ErrorCharColumn">ParseResult.ErrorCharColumn</see>, and
+    /// <see cref="ParseResult.ErrorTokenColumn">ParseResult.ErrorTokenColumn</see>.
     /// </remarks>
     GrammarMismatch,
 
@@ -73,7 +77,7 @@ public enum ParseOutcome
 
     /// <summary>
     /// <see cref="ParseOptions.Cancellation">ParseOptions.Cancellation</see> was triggered before the parse
-    /// finished. Polled alongside the timeout from inside the parse loop.
+    /// finished.
     /// </summary>
     Canceled,
 }
