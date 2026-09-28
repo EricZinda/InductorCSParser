@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using InductorParser;
 using InductorParser.Lexing;
+using InductorParser.Tracing;
 
 namespace InductorParser.SyntaxTree;
 
@@ -329,6 +330,125 @@ public sealed class Symbol
             for (int i = children.Count - 1; i >= 0; i--)
                 stack.Push(children[i]);
         }
+    }
+
+    /// <summary>
+    /// Returns a readable tree starting at this Symbol, including all its descendants, with rule
+    /// names resolved through the grammar this Symbol was parsed with. Each node appears on its
+    /// own line, with children indented two spaces per level.
+    /// </summary>
+    /// <remarks>
+    /// Use this to print part of a parse tree. For the whole result, use
+    /// <see cref="ParseResult.PrintTree">ParseResult.PrintTree()</see>. Most nodes show their display
+    /// label and matched text. An unnamed single-rune leaf uses the shorter form <c>'h'</c>. Naming
+    /// its rule with <see cref="Rule.As(string)">Rule.As(string)</see> makes it show the name and text
+    /// instead, such as <c>letter: "h"</c>.
+    /// <para>
+    /// This only works on a Symbol that came out of <see cref="Rule.Parse(string)">Rule.Parse(string)</see>,
+    /// because that's where the grammar reference comes from. For a Symbol built by hand with no
+    /// <see cref="ParseContext"/>, use <see cref="PrintTree(Rule)">Symbol.PrintTree(Rule)</see> and pass
+    /// the grammar yourself.
+    /// </para>
+    /// </remarks>
+    /// <returns>The formatted tree, ending with a newline.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// This Symbol has no grammar to resolve rule names against because it was built by hand
+    /// rather than by a parse.
+    /// </exception>
+    /// <example>
+    /// <code>
+    /// using static InductorParser.Rules;
+    ///
+    /// var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Preserve();
+    /// var result = word.Parse("hi");
+    /// Console.Write(result.Tree!.PrintTree());
+    /// </code>
+    /// Output:
+    /// <code language="text">
+    /// word: "hi"
+    ///   'h'
+    ///   'i'
+    /// </code>
+    /// </example>
+    public string PrintTree()
+    {
+        Rule? grammarRoot = _context?.GrammarRoot;
+        if (grammarRoot == null)
+            throw new InvalidOperationException(
+                "This Symbol has no grammar to resolve rule names against: it was built by hand rather " +
+                "than by Rule.Parse. Call PrintTree(Rule) and pass the grammar its ids came from.");
+        return PrintTree(grammarRoot);
+    }
+
+    /// <summary>
+    /// Returns a readable tree starting at this Symbol, including all its descendants, with rule
+    /// names resolved through <paramref name="rule"/>. Each node appears on its own line, with
+    /// children indented two spaces per level.
+    /// </summary>
+    /// <remarks>
+    /// This overload is for a Symbol built by hand (one with no <see cref="ParseContext"/>), or for
+    /// resolving names against a grammar other than the one that produced the Symbol. A Symbol from
+    /// a parse can call <see cref="PrintTree()">Symbol.PrintTree()</see> instead. The output format
+    /// is the same.
+    /// </remarks>
+    /// <param name="rule">The grammar to look up rule names in, usually the one the input was parsed with.</param>
+    /// <returns>The formatted tree, ending with a newline.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is null.</exception>
+    public string PrintTree(Rule rule)
+    {
+        if (rule == null) throw new ArgumentNullException(nameof(rule));
+        var builder = new StringBuilder();
+        AppendNode(this, rule, builder, depth: 0);
+        return builder.ToString();
+    }
+
+    private static void AppendNode(Symbol symbol, Rule rule, StringBuilder builder, int depth)
+    {
+        for (int i = 0; i < depth; i++) builder.Append("  ");
+
+        int idValue = symbol.Id.Value;
+        if (idValue >= 0 && idValue < SymbolRanges.CharacterRangeEnd)
+        {
+            // Character leaf: id is the rune's code point. When the user
+            // gave the rule a .As(...) name, use the long `name: "text"`
+            // form so the name is visible alongside the matched text.
+            // Otherwise use the compact `'c'` form, with U+FFFD standing
+            // in when the id isn't a valid scalar (a surrogate half).
+            string? userName = rule.UserNameOf(symbol.Id);
+            if (userName != null)
+            {
+                // The name comes from .As("..."), which accepts any string,
+                // including one with a control / line-separator char. Escape
+                // it the same way as the matched text below so a name like
+                // "a\nb" can't split this node across two lines.
+                DisplayEscape.AppendEscaped(builder, userName);
+                builder.Append(": \"");
+                DisplayEscape.AppendEscaped(builder, symbol.ToString());
+                builder.Append('"');
+            }
+            else
+            {
+                string runeText = Rune.IsValid(idValue) ? new Rune(idValue).ToString() : "�";
+                builder.Append('\'');
+                DisplayEscape.AppendEscaped(builder, runeText);
+                builder.Append('\'');
+            }
+        }
+        else
+        {
+            string? name = rule.NameOf(symbol.Id) ?? "<unknown>";
+            // Same escape as the character-leaf name branch above: a
+            // .As("...") name with a control / line-separator char must
+            // not break this node's single line.
+            DisplayEscape.AppendEscaped(builder, name);
+            builder.Append(": \"");
+            DisplayEscape.AppendEscaped(builder, symbol.ToString());
+            builder.Append('"');
+        }
+        builder.Append('\n');
+
+        foreach (var child in symbol.Children)
+            AppendNode(child, rule, builder, depth + 1);
     }
 
     /// <summary>

@@ -10,7 +10,7 @@ namespace InductorParser.Tracing;
 // every site that puts user text into a one-line render:
 //   * TokenSet.ToString builds the "[a-z,U+000D,...]" form, including
 //     multi-rune grapheme entries that can contain a CRLF.
-//   * SymbolExtensions.PrintTree's short-form `'c'` rendering of a
+//   * Symbol.PrintTree's short-form `'c'` rendering of a
 //     character-leaf id, which can be a Token('\n').Preserve().
 //   * Lexer.Read's diagnostic trace `'<tokenText>', Consumed: N`, where the
 //     token's chars can include a control / line separator (a CRLF cluster,

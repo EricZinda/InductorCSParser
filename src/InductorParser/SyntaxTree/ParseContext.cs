@@ -5,7 +5,10 @@ namespace InductorParser.SyntaxTree;
 /// <summary>
 /// The per-parse runtime context every Symbol from a parse holds a reference to. It stores what's
 /// needed to recover a Symbol's original-input position, raw source text, and human-readable rule
-/// name.
+/// name. The parser creates one per <see cref="Rule.Parse(string)">Rule.Parse(string)</see> call, so
+/// grammar and rule writers only ever read it: a Symbol from a parse holds one, and a user-defined
+/// <see cref="Rule"/> subclass gets the current one from
+/// <see cref="InductorParser.Lexing.Lexer.Context">Lexer.Context</see> to pass into the Symbols it builds.
 /// </summary>
 public sealed class ParseContext
 {
@@ -34,9 +37,11 @@ public sealed class ParseContext
     public Rule? GrammarRoot { get; }
 
     /// <summary>
-    /// Creates a context for one parse. Null inputs are stored as the empty string.
+    /// Creates a context for one parse. Null inputs are stored as the empty string. Internal because
+    /// only a parsing engine builds one: Rule.Parse here, and the state machine engine in its own
+    /// assembly through InternalsVisibleTo.
     /// </summary>
-    public ParseContext(string originalInput, string parseInput, NormalizationForm? normalizationForm, Rule? grammarRoot = null)
+    internal ParseContext(string originalInput, string parseInput, NormalizationForm? normalizationForm, Rule? grammarRoot = null)
     {
         OriginalInput = originalInput ?? string.Empty;
         ParseInput = parseInput ?? string.Empty;

@@ -557,6 +557,10 @@ public sealed class Symbol
 
     public override string ToString();             // text of the leaves that survived flattening
     public string SourceText { get; }              // verbatim input span this Symbol covers
+    public string PrintTree();                     // indented debug rendering of this subtree, names
+                                                   // resolved through the grammar it was parsed with
+    public string PrintTree(Rule rule);            // same, resolving names through the given grammar
+                                                   // (for a hand-built Symbol with no parse context)
     // Apply the FlattenType pass by hand: Delete nodes dropped, Flatten
     // nodes' children lifted, Preserve nodes kept. For trees parsed with
     // ParseOptions.PreserveAllSymbols; an already-flattened tree passes

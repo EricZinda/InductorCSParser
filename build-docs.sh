@@ -136,7 +136,6 @@ InductorParser.ParseOutcome
 InductorParser.SyntaxTree.SourcePosition
 InductorParser.SyntaxTree.SourceRange
 InductorParser.SyntaxTree.Symbol
-InductorParser.SyntaxTree.SymbolExtensions
 InductorParser.SyntaxTree.SymbolId
 InductorParser.SyntaxTree.ParseContext
 # Writing a Rule

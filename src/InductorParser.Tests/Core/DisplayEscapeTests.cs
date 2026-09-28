@@ -7,7 +7,7 @@ using static InductorParser.Tests.UnicodeExamples;
 namespace InductorParser.Tests;
 
 // Direct tests for the shared one-line-display escape helper that
-// TokenSet.ToString, SymbolExtensions.PrintTree, and Lexer.Read all
+// TokenSet.ToString, Symbol.PrintTree, and Lexer.Read all
 // route through. The three sites' own tests exercise it indirectly,
 // but DisplayEscape is the single source of truth for which chars
 // get rendered as U+XXXX, and the boundary cases (Cf vs Cc, surrogate
