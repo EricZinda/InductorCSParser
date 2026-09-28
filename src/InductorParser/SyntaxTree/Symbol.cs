@@ -9,6 +9,9 @@ namespace InductorParser.SyntaxTree;
 
 /// <summary>
 /// A node in the parse tree produced by <see cref="Rule.Parse(string)">Rule.Parse(string)</see>.
+/// Rules construct Symbols during parsing. Grammar authors never need to construct them.
+/// They read the Symbols returned in <see cref="ParseResult.Tree">ParseResult.Tree</see> and
+/// <see cref="ParseResult.Symbols">ParseResult.Symbols</see> to work with the parse results.
 /// </summary>
 /// <remarks>
 /// A Symbol has one of two shapes. A composite has a list of child Symbols and comes from
@@ -223,19 +226,23 @@ public sealed class Symbol
     /// printing, or null when there's no grammar to resolve against.
     /// </summary>
     /// <remarks>
-    /// When the rule was constructed with <see cref="Rule.As(string)">Rule.As</see>("name"), that name is returned. Otherwise, it falls
-    /// back the same way <see cref="Rule.NameOf(SymbolId)">Rule.NameOf(SymbolId)</see> does: a character-leaf rule resolves
-    /// to the matched rune's own text, and any other rule resolves to its class-derived trace
-    /// label ("And", "OneOrMore", "BetweenInclusive[1..3]"). So an anonymous <see cref="Rules.And">Rules.And</see>(...)
-    /// returns "And" and an anonymous <see cref="Rules.Token(char)">Rules.Token</see>('a') leaf returns "a". Returns null when the Symbol
-    /// was hand-built with no <see cref="ParseContext"/>, or its id doesn't map to any rule
-    /// reachable from the parse's grammar.
+    /// If you named the rule with <see cref="Rule.As(string)">Rule.As("name")</see>, that name is used.
+    /// Otherwise, a rule for one specific rune uses that rune's text, such as "a".
+    /// Otherwise, it uses a default label, such as "Token" or "And", including for a grapheme made of multiple runes.
+    /// <para>
+    /// This is a label for the rule. Use <see cref="Symbol.ToString">Symbol.ToString()</see> to get the text it matched.
+    /// </para>
+    /// Returns null when the Symbol has no <see cref="ParseContext"/> or its id can't be resolved.
     /// <para>
     /// This is a display label, not a dispatch key. Because it includes the trace-label and
     /// rune-text fallbacks it's neither unique nor limited to names the grammar author chose. To
     /// test whether a Symbol came from a rule the author actually named, use
-    /// <see cref="Is(string)">Symbol.Is(string)</see>, which matches only <see cref="Rule.As(string)">Rule.As</see>(...) names: <see cref="DisplayName">Symbol.DisplayName</see> can
-    /// be "And" while <see cref="Is(string)">Symbol.Is(string)</see> with "And" is false.
+    /// <see cref="Is(string)">Symbol.Is(string)</see>, which matches only names explicitly assigned with
+    /// <see cref="Rule.As(string)">Rule.As(string)</see>.
+    /// For example, an unnamed <see cref="Rules.And">Rules.And</see> rule gets the automatic display label "And",
+    /// so <see cref="DisplayName">Symbol.DisplayName</see> returns "And". But <c>symbol.Is("And")</c>
+    /// returns false because you didn't name the rule "And". If you explicitly name it with
+    /// <c>As("And")</c>, <c>symbol.Is("And")</c> returns true.
     /// </para>
     /// </remarks>
     public string? DisplayName => _context?.GrammarRoot?.NameOf(Id);
@@ -373,10 +380,10 @@ public sealed class Symbol
     /// a string-backed source, or a default-constructed Symbol).
     /// </summary>
     /// <remarks>
-    /// Under FormC/FormKC/etc normalization the engine scanned a rewritten parse input while the
-    /// user typed the original input. This translates parse-input offsets back to original-input
-    /// offsets via NormalizedPositionMap so the returned positions line up with what the user
-    /// typed. Without normalization (or for a hand-built Symbol with no <see cref="ParseContext"/>),
+    /// Unicode normalization can change the number of characters in the input before parsing.
+    /// The returned positions refer to your original input, even when parsing used a normalized version.
+    /// See <a href="../docs/MappingPositionsAfterNormalization.md">Mapping Positions After Normalization</a>
+    /// for how positions are converted. Without normalization (or for a hand-built Symbol with no <see cref="ParseContext"/>),
     /// the backing string is treated as both the parse input and the original input.
     /// </remarks>
     public SourceRange? SourceRange

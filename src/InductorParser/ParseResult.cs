@@ -250,9 +250,12 @@ public readonly struct ParseResult
     /// the grammar that produced this result. Returns null if the id isn't known.
     /// </summary>
     /// <remarks>
-    /// The <see cref="InductorParser.ParseResult">ParseResult</see>-level mirror of <see cref="InductorParser.SyntaxTree.Symbol.DisplayName">Symbol.DisplayName</see>: same fallback chain
-    /// (<see cref="Rule.As(string)">Rule.As</see>(...) name, else class-derived trace label, else rune text), so it's
-    /// a display label, not a dispatch key.
+    /// If you named the rule with <see cref="Rule.As(string)">Rule.As("name")</see>, that name is used.
+    /// Otherwise, a rule for one specific rune uses that rune's text, such as "a".
+    /// Otherwise, it uses a default label, such as "Token" or "And", including for a grapheme made of multiple runes.
+    /// <para>
+    /// This is a label for the rule. Use <see cref="Symbol.ToString">Symbol.ToString()</see> to get the text it matched.
+    /// </para>
     /// </remarks>
     public string? DisplayNameOf(SymbolId id) => _grammar?.NameOf(id);
 

@@ -71,13 +71,13 @@ Compare that side by side with the C++ version from `GettingStarted.md` and you 
 
 The `using static InductorParser.Rules;` at the top is what lets us write `And(...)` and `Or(...)` and `Token('=')` without a class qualifier. It's the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.And(...)`.
 
-Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on every reachable rule) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on the rule's id), but trace output and tree printing will fall back to class-derived labels like `And` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
+Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on every reachable rule) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on the rule's id), but tree printing uses a rune's text for a rule matching one specific rune. Otherwise, it uses a default label like `Token`, `And`, or `OneOrMore`, including for a grapheme made of multiple runes. Trace output also provides default rule labels. These labels don't describe what the rule represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
 
 ## Naming Rules
 
 Most rules don't need a name. `Find(someRule)` takes the rule object you already hold, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree. What `Find` compares under the covers is the `SymbolId` stamped on the rule, not the object reference. For named rules and compiled composites the id is unique to the rule, so it behaves like identity. Anonymous single-rune leaves are the exception: `Token('a')` uses the rune's code point as its id, so two anonymous `Token('a')` rules look like the same rule to `Find`, and an anonymous `OneOf(...)` labels each leaf with whichever rune matched rather than with the rule's own id. Naming a leaf with `.As(...)` gives it a unique id and removes both wrinkles.
 
-Sometimes names do matter though: trace output, tree printing, serialization. Trace output prints rule names to show which rule was tried at each position. `Symbol.DisplayName` labels each node when you print a parse tree. Without an explicit name, these fall back to a class-derived label like `And`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar. Error messages are a separate mechanism entirely: a failed parse reports the `.WithError("...")` text of the deepest rule that failed, or the generic "Unexpected 'x' at line L, column C." default when there isn't one (or "Unexpected end of input at line L, column C." when the failure is at the end). Rule names never appear in error messages, so naming a rule doesn't change what a failed parse reports. See [Primer: Parsing Errors](primerFailure.md) for how error reporting works.
+Sometimes names do matter though: trace output, tree printing, serialization. Trace output prints rule names to show which rule was tried at each position. `Symbol.DisplayName` labels each node when you print a parse tree. If you named the rule with `Rule.As("name")`, that name is used. Otherwise, a rule for one specific rune uses that rune's text, such as `"a"`. Otherwise, it uses a default label, such as `"Token"` or `"And"`, including for a grapheme made of multiple runes. This is a label for the rule. Use `Symbol.ToString()` to get the text it matched. Error messages are a separate mechanism entirely: a failed parse reports the `.WithError("...")` text of the deepest rule that failed, or the generic "Unexpected 'x' at line L, column C." default when there isn't one (or "Unexpected end of input at line L, column C." when the failure is at the end). Rule names never appear in error messages, so naming a rule doesn't change what a failed parse reports. See [Primer: Parsing Errors](primerFailure.md) for how error reporting works.
 
 Here are different ways you can name rules:
 
@@ -172,7 +172,7 @@ public abstract class Rule
 }
 ```
 
-`rule.NameOf(someId)` consults two sources in order and returns the first match. For rune-range ids (0..0x10FFFF) it renders the code point directly as a single-rune string (`"A"` or `"漢"`). Otherwise it looks the id up in a per-grammar index built lazily on the first `NameOf` call (grammars that never ask never pay for building it), which maps every reachable rule's id to the user's `.As(...)` name (if set) or the rule's class-derived name like `"And"`, `"OneOrMore"`, or `"BetweenInclusive[1..3]"`. Returns null if the id isn't in the grammar.
+If you named the rule with `Rule.As("name")`, that name is used. Otherwise, a rule for one specific rune uses that rune's text, such as `"a"`. Otherwise, it uses a default label, such as `"Token"` or `"And"`, including for a grapheme made of multiple runes. This is a label for the rule. Use `Symbol.ToString()` to get the text it matched.
 
 The id numbering space is split into three ranges so the kinds of symbol id never collide:
 
@@ -546,8 +546,8 @@ public sealed class Symbol
     public IReadOnlyList<Symbol> Children { get; }
     public bool IsLeaf { get; }                    // true for a leaf with matched text, false for a
                                                    // composite (even one with zero children)
-    public string? DisplayName { get; }            // .As(...) name if set, else the class-derived label,
-                                                   // else the matched rune's own text
+    public string? DisplayName { get; }            // .As(...) name; otherwise the specific rune's text;
+                                                   // otherwise a default label, also for multi-rune graphemes
     public static readonly Symbol Discarded;       // what a Delete rule returns from TryParse to mean
                                                    // "matched successfully, contributes nothing"
 

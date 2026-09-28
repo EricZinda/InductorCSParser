@@ -891,12 +891,12 @@ public abstract class Rule
     /// hasn't been compiled yet, since ids aren't stable until <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> runs.
     /// </summary>
     /// <remarks>
-    /// <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">Rule.NameOf</see> tries three things in order. A name from <see cref="Rule.As(string)">Rule.As</see>("foo") wins, whatever
-    /// the id is. Otherwise an id in the rune range (0..0x10FFFF) is a Unicode
-    /// code point and returns that one character (0x41 returns "A", 0x1F3B8
-    /// returns "🎸", a lone surrogate half returns null). Otherwise it's an
-    /// unnamed rule and returns the class-derived trace name ("And", "OneOrMore",
-    /// "BetweenInclusive[1..3]").
+    /// If you named the rule with <see cref="Rule.As(string)">Rule.As("name")</see>, that name is used.
+    /// Otherwise, a rule for one specific rune uses that rune's text, such as "a".
+    /// Otherwise, it uses a default label, such as "Token" or "And", including for a grapheme made of multiple runes.
+    /// <para>
+    /// This is a label for the rule. Use <see cref="Symbol.ToString">Symbol.ToString()</see> to get the text it matched.
+    /// </para>
     /// <para>
     /// Intended for parse-tree walkers (which see Symbols with SymbolIds,
     /// not Rule references) and for error-message rendering that wants to quote

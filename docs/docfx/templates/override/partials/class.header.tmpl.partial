@@ -147,7 +147,7 @@
 <h2 id="{{id}}">{{>partials/classSubtitle}}</h2>
 <dl class="parameters">
 {{#children}}
-  <dt id="{{id}}"><code>{{syntax.content.0.value}}</code></dt>
+  <dt id="{{id}}"><code>{{#declarationHeading}}{{{declarationHeading}}}{{/declarationHeading}}{{^declarationHeading}}{{syntax.content.0.value}}{{/declarationHeading}}</code></dt>
   {{#remarks}}<dd>{{{summary}}}{{{remarks}}}</dd>{{/remarks}}
   {{^remarks}}<dd>{{{summary}}}</dd>{{/remarks}}
 {{/children}}
