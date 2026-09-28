@@ -373,7 +373,7 @@ internal static partial class GraphemeSegmentation
         public int CurrentCodeUnitOffset { get; private set; }
 
         /// <summary>
-        /// Will be <see cref="GraphemeClusterBreakType.Other"/> if invalid data or EOF reached.
+        /// Will be <see cref="GraphemeClusterBreakType.Other">GraphemeClusterBreakType.Other</see> if invalid data or EOF reached.
         /// Caller shouldn't need to special-case this since the normal rules will halt on this condition.
         /// </summary>
         public GraphemeClusterBreakType CurrentType { get; private set; }

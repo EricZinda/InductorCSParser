@@ -262,8 +262,8 @@ public readonly partial struct TokenSet
     // Inside a <code> block they're left alone.
     /// <summary>
     /// The set of Unicode scalar values that may begin an identifier per
-    /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> R1 (XID_Start). Use together with <see cref="XidContinue"/> and
-    /// <see cref="Rules.Identifier"/> for spec-compliant identifier matching.
+    /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> R1 (XID_Start). Use together with <see cref="XidContinue">TokenSet.XidContinue</see> and
+    /// <see cref="Rules.Identifier">Rules.Identifier(TokenSet, TokenSet)</see> for spec-compliant identifier matching.
     /// </summary>
     /// <remarks>
     /// Doesn't include the underscore. For the programming-language profile
@@ -279,7 +279,7 @@ public readonly partial struct TokenSet
     /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> R1 (XID_Continue). Intended for the tail of an identifier match.
     /// </summary>
     /// <remarks>
-    /// Includes everything in <see cref="XidStart"/> plus combining marks,
+    /// Includes everything in <see cref="XidStart">TokenSet.XidStart</see> plus combining marks,
     /// decimal digits, and connector punctuation such as the underscore.
     /// </remarks>
     public static TokenSet XidContinue => _xidContinue.Value;

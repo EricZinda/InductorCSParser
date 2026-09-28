@@ -9,19 +9,19 @@ namespace InductorParser.SyntaxTree;
 /// </summary>
 public sealed class ParseContext
 {
-    /// <summary>The exact string the caller passed to <see cref="Rule.Parse(string)"/>.</summary>
+    /// <summary>The exact string the caller passed to <see cref="Rule.Parse(string)">Rule.Parse(string)</see>.</summary>
     public string OriginalInput { get; }
 
     /// <summary>
     /// What the lexer scanned, after grammar-level Unicode normalization. Equals
-    /// <see cref="OriginalInput"/> by reference when no normalization happened (or when the input
+    /// <see cref="OriginalInput">ParseContext.OriginalInput</see> by reference when no normalization happened (or when the input
     /// was already in the target form).
     /// </summary>
     public string ParseInput { get; }
 
     /// <summary>
-    /// The form <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> was called with, used to translate <see cref="ParseInput"/> offsets back to
-    /// <see cref="OriginalInput"/> offsets. Null when no normalization was configured.
+    /// The form <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> was called with, used to translate <see cref="ParseInput">ParseContext.ParseInput</see> offsets back to
+    /// <see cref="OriginalInput">ParseContext.OriginalInput</see> offsets. Null when no normalization was configured.
     /// </summary>
     public NormalizationForm? NormalizationForm { get; }
 

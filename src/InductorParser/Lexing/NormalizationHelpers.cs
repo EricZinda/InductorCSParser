@@ -9,9 +9,9 @@ namespace InductorParser.Lexing;
 /// so callers get the same answers the parser does. This is the
 /// normalization layer. Its segmentation counterpart is
 /// <see cref="GraphemeHelpers"/>. Public so user-defined rules and
-/// test oracles can normalize text exactly the way <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> and Parse
+/// test oracles can normalize text exactly the way <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> and Parse
 /// do. Which normalizer is used is the process-wide
-/// <see cref="UnicodeEnvironment.Implementation"/> setting, which
+/// <see cref="UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see> setting, which
 /// governs normalization and segmentation together.
 /// </summary>
 public static class NormalizationHelpers
@@ -19,7 +19,7 @@ public static class NormalizationHelpers
     /// <summary>
     /// Normalize <paramref name="text"/> to <paramref name="form"/>
     /// with the process-wide normalizer, exactly the way Parse
-    /// normalizes input and <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> converts grammar text. Returns the
+    /// normalizes input and <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> converts grammar text. Returns the
     /// same string instance when the text is already normalized.
     /// Throws <see cref="ArgumentException"/> on text the normalizers
     /// reject: an unpaired UTF-16 surrogate (ill-formed UTF-16), or

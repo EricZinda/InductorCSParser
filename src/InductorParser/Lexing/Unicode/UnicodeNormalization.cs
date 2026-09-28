@@ -6,7 +6,7 @@ namespace InductorParser.Lexing.Unicode;
 
 /// <summary>
 /// The parser's single entry point for Unicode normalization. Every
-/// Normalize / <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">IsNormalized</see> call inside the library routes through this
+/// Normalize / <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">NormalizationHelpers.IsNormalized</see> call inside the library routes through this
 /// class, so the whole parser uses one implementation.
 /// </summary>
 /// <remarks>

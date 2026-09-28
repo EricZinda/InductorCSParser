@@ -13,10 +13,10 @@ namespace InductorParser;
 /// </summary>
 /// <remarks>
 /// <a href="../docs/Primer3.md#compatibility-vs-canonical">Unicode normalization form</a>
-/// is a grammar-level decision committed at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>
+/// is a grammar-level decision committed at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>
 /// time, not a parse option. Call rule.Compile() with a Normalization form (or
 /// null to disable normalization) before parsing if you want a form other 
-/// than the FormC default. See <see cref="Rule.Compile(System.Text.NormalizationForm?)"/>.
+/// than the FormC default. See <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(NormalizationForm?)</see>.
 /// </remarks>
 public sealed class ParseOptions
 {
@@ -34,13 +34,13 @@ public sealed class ParseOptions
 
     /// <summary>
     /// Caps how many work units the parse may consume before giving up. The
-    /// parse aborts with <see cref="ParseOutcome.RuleCountLimitExceeded"/> when
+    /// parse aborts with <see cref="ParseOutcome.RuleCountLimitExceeded">ParseOutcome.RuleCountLimitExceeded</see> when
     /// a periodic check (see remarks) finds the counter has exceeded this
     /// limit. Set to 0 to disable.
     /// </summary>
     /// <remarks>
     /// Each rule invocation counts as one unit, as does each iteration of a
-    /// bulk-scan inner loop (<see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>, the AdvanceWhile*
+    /// bulk-scan inner loop (<see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">Rules.ScanWhile</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see>, the AdvanceWhile*
     /// primitives, or any rule that calls <see cref="InductorParser.Lexing.Lexer.TickBudget">Lexer.TickBudget</see>). Because it's a count and not a wall-clock measurement, the same input
     /// against the same grammar trips at the same point on every run. The
     /// default of 10,000,000 lets well-formed parses through (a 1 MB file
@@ -63,7 +63,7 @@ public sealed class ParseOptions
     /// Maximum recursion depth (rule invocations currently on the call stack),
     /// to catch deeply nested but well-formed input (think 10,000 open parens)
     /// before it blows the .NET call stack and crashes the host process. Set to
-    /// 0 to disable. Independent of <see cref="RuleCountLimit"/>: a deeply
+    /// 0 to disable. Independent of <see cref="RuleCountLimit">ParseOptions.RuleCountLimit</see>: a deeply
     /// nested input may use few invocations total.
     /// </summary>
     /// <remarks>
@@ -82,7 +82,7 @@ public sealed class ParseOptions
     /// Wall-clock limit. The parse loop polls <see cref="System.Diagnostics.Stopwatch.Elapsed">Stopwatch.Elapsed</see> synchronously
     /// from inside its own loop, so the deadline trips even on WebGL where
     /// there's no background timer thread. Set to <see cref="System.TimeSpan.Zero">TimeSpan.Zero</see> to disable,
-    /// matching the <see cref="RuleCountLimit"/> / <see cref="MaxDepth"/>
+    /// matching the <see cref="RuleCountLimit">ParseOptions.RuleCountLimit</see> / <see cref="MaxDepth">ParseOptions.MaxDepth</see>
     /// convention.
     /// </summary>
     /// <remarks>
@@ -100,7 +100,7 @@ public sealed class ParseOptions
     /// long enough to matter runs long enough to hit a check. Don't rely on
     /// Timeout to trip on a tiny grammar against a tiny input. For a cap that
     /// trips at the same point on every run regardless of hardware, use
-    /// <see cref="RuleCountLimit"/> instead. It's polled at the same periodic
+    /// <see cref="RuleCountLimit">ParseOptions.RuleCountLimit</see> instead. It's polled at the same periodic
     /// checkpoints, so it shares the granularity caveat described in its
     /// remarks, but a count is repeatable where a clock isn't.
     /// </para>
@@ -125,7 +125,7 @@ public sealed class ParseOptions
     /// in the remarks.
     /// </summary>
     /// <remarks>
-    /// Turn this on to debug or inspect a grammar, to <see cref="InductorParser.ParseResult.PrintTree">PrintTree</see> the full
+    /// Turn this on to debug or inspect a grammar, to <see cref="InductorParser.ParseResult.PrintTree">ParseResult.PrintTree</see> the full
     /// structure, or to Find(rule) against Symbols that the default path would
     /// remove. When off (the default) the parser applies each rule's FlattenType before
     /// returning so that <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> nodes are gone, <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>
@@ -136,11 +136,11 @@ public sealed class ParseOptions
     /// <para>
     /// Named aliases usually replace the node for the rule they wrap, even
     /// when this option is enabled. For example, if a rule named "digits"
-    /// is wrapped in an <see cref="Rules.Alias"/> named "year", the tree
+    /// is wrapped in an <see cref="Rules.Alias">Rules.Alias(Rule)</see> named "year", the tree
     /// contains a "year" node, with no separate "digits" node underneath it.
-    /// A wrapped rule with <see cref="SyntaxTree.FlattenType.Delete"/> is
+    /// A wrapped rule with <see cref="SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> is
     /// different: this option keeps its node and content underneath the alias,
-    /// marked for deletion. Calling <see cref="SyntaxTree.Symbol.Flatten"/>
+    /// marked for deletion. Calling <see cref="SyntaxTree.Symbol.Flatten">Symbol.Flatten()</see>
     /// on the debug tree then removes that node and its content, leaving the
     /// empty alias node that a normal parse would produce.
     /// </para>
@@ -169,25 +169,25 @@ public sealed class ParseOptions
     private string _withErrorTemplate =
         "{message} at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
-    /// Template that wraps a rule's <c><see cref="Rule.WithError">.WithError("...")</see></c> message when that
+    /// Template that wraps a rule's <c><see cref="Rule.WithError">Rule.WithError("...")</see></c> message when that
     /// rule is the deepest failure. The parser replaces <c>{message}</c> with
-    /// the text passed to <see cref="Rule.WithError"/>. Setting it to null throws.
+    /// the text passed to <see cref="Rule.WithError">Rule.WithError(string, bool)</see>. Setting it to null throws.
     /// A built-in English default adds the error location to the rule's message.
     /// Change this template to localize that added text, rearrange the location,
     /// or show only the rule's message.
     /// </summary>
     /// <remarks>
-    /// For example, <c><see cref="Rule.WithError">.WithError("Expected a number")</see></c>
+    /// For example, <c><see cref="Rule.WithError">Rule.WithError("Expected a number")</see></c>
     /// with the default template produces "Expected a number at line 2, column 5."
     /// if the error is at that location.
     /// <para>
     /// The default appends " at line {lineNumber}, column {tokenColumnNumber}." to
-    /// the author's text. Set it to "{message}" to get the raw <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">.WithError</see>
+    /// the author's text. Set it to "{message}" to get the raw <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">Rule.WithError</see>
     /// string back with no position, or reshape it however you like (position
-    /// first, localized, and so on). See <see cref="PositionalErrorTemplate"/> for
+    /// first, localized, and so on). See <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for
     /// the placeholder syntax. The per-template placeholder here is {message}, the
     /// author's text. Unlike the mechanical templates it has no {character},
-    /// since a <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">WithError</see> failure can sit at end of input where there's no
+    /// since a <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">Rule.WithError</see> failure can sit at end of input where there's no
     /// character to name.
     /// </para>
     /// </remarks>
@@ -256,7 +256,7 @@ public sealed class ParseOptions
     /// <summary>
     /// Template for the default message when the parser fails at end of input
     /// and no .WithError("...") was attached. See
-    /// <see cref="PositionalErrorTemplate"/> for the placeholder syntax.
+    /// <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder syntax.
     /// Setting it to null throws.
     /// A built-in English default reports unexpected end of input and its location.
     /// Change this template to localize the message or explain that more input was expected.
@@ -279,11 +279,11 @@ public sealed class ParseOptions
     /// Two kinds of input trigger it: an unpaired UTF-16 surrogate (which is
     /// ill-formed UTF-16), and U+FFFE (which is a noncharacter that .NET's string.Normalize
     /// throws upon finding. Note that this parser rejects it the same way on every runtime). The
-    /// parse returns <see cref="ParseOutcome.MalformedInput"/> with this
+    /// parse returns <see cref="ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see> with this
     /// message instead of letting string.Normalize throw an ArgumentException
     /// whose text the app can't control.
     /// <para>
-    /// See <see cref="PositionalErrorTemplate"/> for the placeholder syntax. The
+    /// See <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder syntax. The
     /// per-template placeholder here is {character}, the offending element. A
     /// lone surrogate renders as U+D800-style text, since there's no character
     /// to show.
@@ -297,8 +297,8 @@ public sealed class ParseOptions
 
     private string _timeoutAbortTemplate = "Parse aborted: timeout exceeded.";
     /// <summary>
-    /// Template for the default message when <see cref="Timeout"/> aborts the
-    /// parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
+    /// Template for the default message when <see cref="Timeout">ParseOptions.Timeout</see> aborts the
+    /// parse. See <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder
     /// syntax. Setting it to null throws.
     /// Defaults to "Parse aborted: timeout exceeded." Change this template to
     /// localize the message or include the configured duration with {timeout}.
@@ -311,8 +311,8 @@ public sealed class ParseOptions
 
     private string _ruleCountLimitAbortTemplate = "Parse aborted: rule-count limit exceeded.";
     /// <summary>
-    /// Template for the default message when <see cref="RuleCountLimit"/> aborts
-    /// the parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
+    /// Template for the default message when <see cref="RuleCountLimit">ParseOptions.RuleCountLimit</see> aborts
+    /// the parse. See <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder
     /// syntax. Setting it to null throws.
     /// Defaults to "Parse aborted: rule-count limit exceeded." Change this template
     /// to explain the processing limit to your users or include its value with {limit}.
@@ -325,8 +325,8 @@ public sealed class ParseOptions
 
     private string _depthLimitAbortTemplate = "Parse aborted: maximum recursion depth exceeded.";
     /// <summary>
-    /// Template for the default message when <see cref="MaxDepth"/> aborts the
-    /// parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
+    /// Template for the default message when <see cref="MaxDepth">ParseOptions.MaxDepth</see> aborts the
+    /// parse. See <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder
     /// syntax. Setting it to null throws.
     /// Defaults to "Parse aborted: maximum recursion depth exceeded." Change this
     /// template to describe excessive nesting in your grammar's terms or include {limit}.
@@ -339,8 +339,8 @@ public sealed class ParseOptions
 
     private string _cancellationAbortTemplate = "Parse aborted: cancellation requested.";
     /// <summary>
-    /// Template for the default message when <see cref="Cancellation"/> aborts
-    /// the parse. See <see cref="PositionalErrorTemplate"/> for the placeholder
+    /// Template for the default message when <see cref="Cancellation">ParseOptions.Cancellation</see> aborts
+    /// the parse. See <see cref="PositionalErrorTemplate">ParseOptions.PositionalErrorTemplate</see> for the placeholder
     /// syntax. Setting it to null throws.
     /// Defaults to "Parse aborted: cancellation requested." Change this template
     /// to localize the message or use your app's usual cancellation wording.

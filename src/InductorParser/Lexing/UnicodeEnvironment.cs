@@ -74,7 +74,7 @@ public static class UnicodeEnvironment
     /// <summary>
     /// Which Unicode implementation this process uses, for both
     /// segmentation and normalization. Defaults to
-    /// <see cref="UnicodeImplementation.Automatic"/>: the built-in
+    /// <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>: the built-in
     /// implementations in the netstandard2.1 assembly (the build Unity
     /// and other pre-net8.0 hosts load), the runtime's StringInfo and
     /// string.Normalize in the net8.0 assembly. Set it once at startup,
@@ -91,7 +91,7 @@ public static class UnicodeEnvironment
     /// two implementations. Reading this property never freezes
     /// anything and returns the requested value, which may still be
     /// Automatic. For the implementation actually in use, read
-    /// <see cref="ActiveImplementation"/>.
+    /// <see cref="ActiveImplementation">UnicodeEnvironment.ActiveImplementation</see>.
     /// </summary>
     public static UnicodeImplementation Implementation
     {
@@ -133,13 +133,13 @@ public static class UnicodeEnvironment
     /// and the process is running under invariant globalization (which
     /// makes string.Normalize return its input unchanged) or Windows
     /// NLS (which normalizes from Windows' own data instead of ICU),
-    /// the first normalizing <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> or Parse throws
+    /// the first normalizing <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> or Parse throws
     /// <see cref="InvalidOperationException"/>, because a normalizing
     /// grammar would silently produce different parses than on a
     /// normally configured host. Set this to true at startup, before
     /// building grammars or parsing, to say the host's globalization is
     /// understood and the runtime implementations are wanted anyway.
-    /// Same freeze rule as <see cref="Implementation"/>: the first
+    /// Same freeze rule as <see cref="Implementation">UnicodeEnvironment.Implementation</see>: the first
     /// segmentation or normalization query freezes it, and setting it
     /// after that throws. It has no effect when the built-in
     /// implementations are active, since they never touch host
@@ -168,8 +168,8 @@ public static class UnicodeEnvironment
 
     /// <summary>
     /// The implementation being used. It's one of
-    /// <see cref="UnicodeImplementation.Runtime"/> or
-    /// <see cref="UnicodeImplementation.Bundled"/>, never Automatic.
+    /// <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see> or
+    /// <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>, never Automatic.
     /// Reading it resolves and freezes the choice the same way the
     /// first segmentation or normalization query does, so the answer
     /// can never be invalidated by a later change.

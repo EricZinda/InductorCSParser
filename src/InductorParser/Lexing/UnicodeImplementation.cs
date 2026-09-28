@@ -5,7 +5,7 @@ namespace InductorParser.Lexing;
 /// grapheme cluster segmentation (token boundaries, Token and
 /// <see cref="InductorParser.TokenSet.Graphemes(System.String[])">TokenSet.Graphemes</see> validation, error positions, the
 /// <see cref="GraphemeHelpers"/> methods) and Unicode normalization
-/// (input at Parse, literals and token sets at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>, position
+/// (input at Parse, literals and token sets at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>, position
 /// mapping, the <see cref="NormalizationHelpers"/> methods).
 /// </summary>
 public enum UnicodeImplementation
@@ -16,10 +16,10 @@ public enum UnicodeImplementation
     /// its own: it ships one assembly per target framework, each
     /// baking in what Automatic means, and the runtime picks which
     /// assembly it loads. In the net8.0 assembly Automatic means
-    /// <see cref="Runtime"/>, so segmentation and normalization stay
+    /// <see cref="Runtime">UnicodeImplementation.Runtime</see>, so segmentation and normalization stay
     /// in sync with the rest of the runtime's Unicode machinery. In
     /// the netstandard2.1 assembly (the one Unity's Mono and IL2CPP
-    /// load) it means <see cref="Bundled"/>, because those runtimes
+    /// load) it means <see cref="Bundled">UnicodeImplementation.Bundled</see>, because those runtimes
     /// ship a StringInfo that predates <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> and a string.Normalize
     /// that misses mappings and accepts ill-formed UTF-16.
     /// </summary>

@@ -8,15 +8,15 @@ using InductorParser.Lexing;
 namespace InductorParser.SyntaxTree;
 
 /// <summary>
-/// A node in the parse tree produced by <see cref="Rule.Parse(string)"/>.
+/// A node in the parse tree produced by <see cref="Rule.Parse(string)">Rule.Parse(string)</see>.
 /// </summary>
 /// <remarks>
 /// A Symbol has one of two shapes. A composite has a list of child Symbols and comes from
-/// rules that build structure (And, Or, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">OneOrMore</see>). A leaf stores a section of the original
+/// rules that build structure (And, Or, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see>). A leaf stores a section of the original
 /// input (a ReadOnlyMemory&lt;char&gt;) and comes from rules that match content (Token, Literal,
-/// <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>). The parse never copies input into a new string.
+/// <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>, <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see>). The parse never copies input into a new string.
 /// <para>
-/// A Symbol can also report where in the source it came from. <see cref="SourceRange"/> returns
+/// A Symbol can also report where in the source it came from. <see cref="SourceRange">Symbol.SourceRange</see> returns
 /// a Start/End pair of <see cref="SourcePosition"/>s in the same char / token / line / column
 /// units <see cref="ParseResult"/> uses for error positions.
 /// </para>
@@ -28,12 +28,12 @@ public sealed class Symbol
 
     /// <summary>
     /// The Symbol a rule returns from TryParse to mean "matched successfully, contributes
-    /// nothing" when its effective <see cref="FlattenType"/> is Delete. A rule needs a non-null
+    /// nothing" when its effective <see cref="FlattenType">Symbol.FlattenType</see> is Delete. A rule needs a non-null
     /// value to signal success (null means failure), and this is the value the tree then drops.
     /// </summary>
     /// <remarks>
-    /// Consumers like AndRule filter it out before it reaches a parent's <see cref="Children"/>
-    /// list, so a <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> rule never contributes a Discarded Symbol to the final tree. Never
+    /// Consumers like AndRule filter it out before it reaches a parent's <see cref="Children">Symbol.Children</see>
+    /// list, so a <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> rule never contributes a Discarded Symbol to the final tree. Never
     /// stored as a child of any real Symbol.
     /// </remarks>
     public static readonly Symbol Discarded = new Symbol(default, FlattenType.Delete, ReadOnlyMemory<char>.Empty);
@@ -59,7 +59,7 @@ public sealed class Symbol
 
     /// <summary>
     /// True when this Symbol is a leaf with matched text, false when it's a composite
-    /// with child Symbols. A composite with an empty <see cref="Children"/> list still
+    /// with child Symbols. A composite with an empty <see cref="Children">Symbol.Children</see> list still
     /// reports false: zero children isn't the same shape as a leaf.
     /// </summary>
     public bool IsLeaf => _isLeaf;
@@ -72,13 +72,13 @@ public sealed class Symbol
 
     /// <summary>
     /// Identifies which rule produced this Symbol. Tree walkers compare it via
-    /// <see cref="Is(Rule)"/>, <see cref="Find(SymbolId)"/>, and friends.
+    /// <see cref="Is(Rule)">Symbol.Is(Rule)</see>, <see cref="Find(SymbolId)">Symbol.Find(SymbolId)</see>, and friends.
     /// </summary>
     public SymbolId Id { get; }
 
     /// <summary>
-    /// How this Symbol participates when the tree is flattened: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> drops it, <see cref="FlattenType.Flatten">Flatten</see> lifts
-    /// its children into the parent, <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> keeps it as a node.
+    /// How this Symbol participates when the tree is flattened: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> drops it, <see cref="FlattenType.Flatten">FlattenType.Flatten</see> lifts
+    /// its children into the parent, <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> keeps it as a node.
     /// </summary>
     public FlattenType FlattenType { get; }
 
@@ -91,7 +91,7 @@ public sealed class Symbol
     /// <remarks>
     /// <paramref name="consumedSpan"/> is every character the rule matched, including ones that
     /// never make it into the tree (<see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> children filtered out of
-    /// <see cref="Children"/>), so <see cref="SourceRange"/> / <see cref="SourceText"/> report
+    /// <see cref="Children">Symbol.Children</see>), so <see cref="SourceRange">Symbol.SourceRange</see> / <see cref="SourceText">Symbol.SourceText</see> report
     /// the full match. For a zero-width match, pass a zero-length memory at the rule's anchor
     /// offset so callers still get a position.
     /// </remarks>
@@ -140,7 +140,7 @@ public sealed class Symbol
 
     /// <summary>
     /// Does this single Symbol come from <paramref name="rule"/>? A single-node check, not a tree
-    /// walk. Reads more naturally than comparing <see cref="Id"/> directly and hides the id
+    /// walk. Reads more naturally than comparing <see cref="Id">Symbol.Id</see> directly and hides the id
     /// plumbing from consumer code.
     /// </summary>
     public bool Is(Rule rule)
@@ -155,12 +155,12 @@ public sealed class Symbol
     /// reference.
     /// </summary>
     /// <remarks>
-    /// Works only on Symbols that came out of a real <see cref="Rule.Parse(string)"/> call.
+    /// Works only on Symbols that came out of a real <see cref="Rule.Parse(string)">Rule.Parse(string)</see> call.
     /// Hand-built Symbols (no context) and Symbols whose id maps to an unnamed rule both return
-    /// false. The name resolves through the same .As(...) index <see cref="Rule.IdOf(string)"/>
+    /// false. The name resolves through the same .As(...) index <see cref="Rule.IdOf(string)">Rule.IdOf(string)</see>
     /// uses, so it's an O(1) lookup after the first call. Class-derived trace labels ("And",
     /// "OneOrMore") aren't in that index, so this never matches them even though
-    /// <see cref="DisplayName"/> falls back to them for unnamed rules.
+    /// <see cref="DisplayName">Symbol.DisplayName</see> falls back to them for unnamed rules.
     /// </remarks>
     public bool Is(string ruleName)
     {
@@ -180,7 +180,7 @@ public sealed class Symbol
     /// </summary>
     /// <remarks>
     /// When the rule was constructed with .As("name"), that name is returned. Otherwise, it falls
-    /// back the same way <see cref="Rule.NameOf(SymbolId)"/> does: a character-leaf rule resolves
+    /// back the same way <see cref="Rule.NameOf(SymbolId)">Rule.NameOf(SymbolId)</see> does: a character-leaf rule resolves
     /// to the matched rune's own text, and any other rule resolves to its class-derived trace
     /// label ("And", "OneOrMore", "BetweenInclusive[1..3]"). So an anonymous And(...)
     /// returns "And" and an anonymous Token('a') leaf returns "a". Returns null when the Symbol
@@ -190,15 +190,15 @@ public sealed class Symbol
     /// This is a display label, not a dispatch key. Because it includes the trace-label and
     /// rune-text fallbacks it's neither unique nor limited to names the grammar author chose. To
     /// test whether a Symbol came from a rule the author actually named, use
-    /// <see cref="Is(string)"/>, which matches only .As(...) names: <see cref="DisplayName"/> can
-    /// be "And" while <see cref="Is(string)"/> with "And" is false.
+    /// <see cref="Is(string)">Symbol.Is(string)</see>, which matches only .As(...) names: <see cref="DisplayName">Symbol.DisplayName</see> can
+    /// be "And" while <see cref="Is(string)">Symbol.Is(string)</see> with "And" is false.
     /// </para>
     /// </remarks>
     public string? DisplayName => _context?.GrammarRoot?.NameOf(Id);
 
     /// <summary>
     /// Depth-first search for the first Symbol produced by <paramref name="rule"/>.
-    /// See <see cref="Find(SymbolId)"/>.
+    /// See <see cref="Find(SymbolId)">Symbol.Find(SymbolId)</see>.
     /// </summary>
     public Symbol? Find(Rule rule)
     {
@@ -207,7 +207,7 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Depth-first search for the first Symbol whose <see cref="Id"/> matches, or null if none
+    /// Depth-first search for the first Symbol whose <see cref="Id">Symbol.Id</see> matches, or null if none
     /// does. Use when you expect exactly one match, such as a named rule that appears once at a
     /// known position in the grammar.
     /// </summary>
@@ -224,7 +224,7 @@ public sealed class Symbol
 
     /// <summary>
     /// Depth-first search yielding every Symbol produced by <paramref name="rule"/>.
-    /// See <see cref="FindAll(SymbolId)"/>.
+    /// See <see cref="FindAll(SymbolId)">Symbol.FindAll(SymbolId)</see>.
     /// </summary>
     public IEnumerable<Symbol> FindAll(Rule rule)
     {
@@ -233,7 +233,7 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Depth-first search yielding every Symbol whose <see cref="Id"/> matches. Use when the rule
+    /// Depth-first search yielding every Symbol whose <see cref="Id">Symbol.Id</see> matches. Use when the rule
     /// can appear multiple times (repetitions, alternations, recursive grammars).
     /// </summary>
     public IEnumerable<Symbol> FindAll(SymbolId id)
@@ -281,12 +281,12 @@ public sealed class Symbol
     /// characters they matched don't appear in the result. <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see> Symbols are gone
     /// too, but their children were lifted into the parent, so the characters those children
     /// matched do still appear. To get the exact input verbatim, keep the string you passed to
-    /// Parse, read <see cref="SourceText"/>, or set <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> to keep every
-    /// grammar node (including <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> ones) in the tree.
+    /// Parse, read <see cref="SourceText">Symbol.SourceText</see>, or set <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> to keep every
+    /// grammar node (including <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> ones) in the tree.
     /// <para>
-    /// When the grammar normalized the input (any form other than <c><see cref="Rule.Compile(System.Text.NormalizationForm?)">Compile(null)</see></c>), a leaf's
+    /// When the grammar normalized the input (any form other than <c><see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(null)</see></c>), a leaf's
     /// text comes from the normalized parse input, so this renders the normalized form the parser
-    /// matched, not the user's original spelling. <see cref="SourceText"/> returns the original.
+    /// matched, not the user's original spelling. <see cref="SourceText">Symbol.SourceText</see> returns the original.
     /// </para>
     /// </remarks>
     public override string ToString()
@@ -366,11 +366,11 @@ public sealed class Symbol
     /// leaves don't trace back to a string-backed source).
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="ToString"/>, which concatenates the text of the leaves present in the
+    /// Unlike <see cref="ToString">Symbol.ToString()</see>, which concatenates the text of the leaves present in the
     /// tree and renders it in the normalized form the parser matched, this reaches back to the
     /// original input by character range, so it includes characters matched by <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>
-    /// leaves (the default for Token, Literal, <see cref="InductorParser.Rules.EndOfLine(System.Boolean)">EndOfLine</see>) that
-    /// aren't in the tree for <see cref="ToString"/> to render. When the grammar normalized the
+    /// leaves (the default for Token, Literal, <see cref="InductorParser.Rules.EndOfLine(System.Boolean)">Rules.EndOfLine</see>) that
+    /// aren't in the tree for <see cref="ToString">Symbol.ToString()</see> to render. When the grammar normalized the
     /// input, the parse-input offsets are translated back to the original before the section is
     /// taken, so the result is always a piece of the user's original input.
     /// </remarks>
@@ -394,12 +394,12 @@ public sealed class Symbol
 
     /// <summary>
     /// Appends this Symbol's flattened contribution to <paramref name="result"/>: nothing for
-    /// <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>, the lifted children for <see cref="FlattenType.Flatten">Flatten</see>, and a rebuilt node (or this Symbol unchanged) for
+    /// <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>, the lifted children for <see cref="FlattenType.Flatten">FlattenType.Flatten</see>, and a rebuilt node (or this Symbol unchanged) for
     /// Preserve.
     /// </summary>
     /// <remarks>
     /// Flattens a tree after it has been parsed with <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> which ignores the default flattening.
-    /// Does nothing to a tree that has already been flattened. <see cref="Flatten"/> is the convenience entry point.
+    /// Does nothing to a tree that has already been flattened. <see cref="Flatten">Symbol.Flatten()</see> is the convenience entry point.
     /// </remarks>
     public void FlattenInto(List<Symbol> result)
     {
@@ -441,8 +441,8 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Returns a flattened copy of this subtree: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> nodes dropped and <see cref="FlattenType.Flatten">Flatten</see> nodes' children
-    /// lifted into their parents. See <see cref="FlattenInto"/>.
+    /// Returns a flattened copy of this subtree: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> nodes dropped and <see cref="FlattenType.Flatten">FlattenType.Flatten</see> nodes' children
+    /// lifted into their parents. See <see cref="FlattenInto">Symbol.FlattenInto(List&lt;Symbol&gt;)</see>.
     /// </summary>
     /// <remarks>
     /// Flattens a tree after it has been parsed with <see cref="InductorParser.ParseOptions.PreserveAllSymbols">ParseOptions.PreserveAllSymbols</see> which ignores the default flattening.

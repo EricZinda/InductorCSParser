@@ -4,8 +4,8 @@ namespace InductorParser.SyntaxTree;
 /// Declares what Symbols a rule's successful match contributes to the resulting parse tree.
 /// </summary>
 /// <remarks>
-/// Set during grammar construction with <see cref="Rule.Flatten(FlattenType)"/> or its
-/// shorthands: <see cref="Rule.Preserve()"/>, <see cref="Rule.Delete()"/>, <see cref="Rule.Flatten()"/>.
+/// Set during grammar construction with <see cref="Rule.Flatten(FlattenType)">Rule.Flatten(FlattenType)</see> or its
+/// shorthands: <see cref="Rule.Preserve()">Rule.Preserve()</see>, <see cref="Rule.Delete()">Rule.Delete()</see>, <see cref="Rule.Flatten()">Rule.Flatten()</see>.
 /// Every rule has a default FlattenType that varies by rule class.
 /// </remarks>
 public enum FlattenType
@@ -26,8 +26,8 @@ public enum FlattenType
     /// <remarks>
     /// Use this for syntax the grammar has to assert is present but the consumer doesn't care
     /// about: punctuation, keywords, whitespace. The dropped text doesn't appear in
-    /// <see cref="Symbol.ToString()"/>, but an enclosing Symbol's <see cref="Symbol.SourceText"/>
-    /// still includes it since <see cref="InductorParser.SyntaxTree.Symbol.SourceText">SourceText</see> reaches back to the original input by character range
+    /// <see cref="Symbol.ToString()">Symbol.ToString()</see>, but an enclosing Symbol's <see cref="Symbol.SourceText">Symbol.SourceText</see>
+    /// still includes it since <see cref="InductorParser.SyntaxTree.Symbol.SourceText">Symbol.SourceText</see> reaches back to the original input by character range
     /// rather than walking the tree.
     /// </remarks>
     Delete,
@@ -44,9 +44,9 @@ public enum FlattenType
     /// alternation, a grouping) where the rule's Symbol would add a level of nesting the
     /// consumer doesn't want.
     /// <para>
-    /// On a leaf, <see cref="Flatten"/> and <see cref="Preserve"/> behave identically: the leaf
+    /// On a leaf, <see cref="Flatten">FlattenType.Flatten</see> and <see cref="Preserve">FlattenType.Preserve</see> behave identically: the leaf
     /// surfaces in the parent's children list with its own Id and matched text either way. A
-    /// leaf has no children for <see cref="Flatten">Flatten</see> to lift past, so the FlattenType tag has no effect on a
+    /// leaf has no children for <see cref="Flatten">FlattenType.Flatten</see> to lift past, so the FlattenType tag has no effect on a
     /// leaf Symbol in the tree.
     /// </para>
     /// </remarks>

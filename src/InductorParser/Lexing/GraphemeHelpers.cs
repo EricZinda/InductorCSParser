@@ -11,7 +11,7 @@ namespace InductorParser.Lexing;
 /// clusters are different units. Public so user-defined rules can ask
 /// the same segmentation questions the built-in rules do. Which
 /// segmenter is used is the process-wide
-/// <see cref="UnicodeEnvironment.Implementation"/> setting, which
+/// <see cref="UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see> setting, which
 /// governs segmentation and normalization together.
 /// </summary>
 public static class GraphemeHelpers

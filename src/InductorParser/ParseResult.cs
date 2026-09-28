@@ -6,25 +6,25 @@ namespace InductorParser;
 
 /// <summary>
 /// The value returned by <see cref="InductorParser.Rule.Parse(System.String)">Rule.Parse</see>: either a successful parse
-/// (the result will be in <see cref="Tree"/> / <see cref="Symbols"/>) or a failure
-/// (see <see cref="Outcome"/>, <see cref="ErrorMessage"/>, and the error-position
+/// (the result will be in <see cref="Tree">ParseResult.Tree</see> / <see cref="Symbols">ParseResult.Symbols</see>) or a failure
+/// (see <see cref="Outcome">ParseResult.Outcome</see>, <see cref="ErrorMessage">ParseResult.ErrorMessage</see>, and the error-position
 /// family).
 /// </summary>
 /// <remarks>
-/// <see cref="Outcome"/> distinguishes "the grammar rejected the input"
-/// (<see cref="InductorParser.ParseOutcome.GrammarMismatch">GrammarMismatch</see>) from "the input can't be normalized" (<see cref="InductorParser.ParseOutcome.MalformedInput">MalformedInput</see>)
-/// from "a budget tripped" (Timeout, <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">RuleCountLimitExceeded</see>,
-/// <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">DepthLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.Canceled">Canceled</see>) so callers can show different messages to the
+/// <see cref="Outcome">ParseResult.Outcome</see> distinguishes "the grammar rejected the input"
+/// (<see cref="InductorParser.ParseOutcome.GrammarMismatch">ParseOutcome.GrammarMismatch</see>) from "the input can't be normalized" (<see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see>)
+/// from "a budget tripped" (Timeout, <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">ParseOutcome.RuleCountLimitExceeded</see>,
+/// <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">ParseOutcome.DepthLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.Canceled">ParseOutcome.Canceled</see>) so callers can show different messages to the
 /// user in each case.
 /// <para>
 /// The error-position family reports the same point (where the parse got
-/// furthest before failing) in different units: <see cref="ErrorCharIndex"/>
-/// (chars, i.e. UTF-16 code units), <see cref="ErrorTokenIndex"/> (tokens, where a
-/// token is one Unicode Grapheme), <see cref="ErrorLine"/>, and the column in
-/// either unit, <see cref="ErrorCharColumn"/> (chars, the Language Server Protocol
-/// convention) or <see cref="ErrorTokenColumn"/> (graphemes). All zero-based.
+/// furthest before failing) in different units: <see cref="ErrorCharIndex">ParseResult.ErrorCharIndex</see>
+/// (chars, i.e. UTF-16 code units), <see cref="ErrorTokenIndex">ParseResult.ErrorTokenIndex</see> (tokens, where a
+/// token is one Unicode Grapheme), <see cref="ErrorLine">ParseResult.ErrorLine</see>, and the column in
+/// either unit, <see cref="ErrorCharColumn">ParseResult.ErrorCharColumn</see> (chars, the Language Server Protocol
+/// convention) or <see cref="ErrorTokenColumn">ParseResult.ErrorTokenColumn</see> (graphemes). All zero-based.
 /// Pick whichever matches the unit the caller will use the number in.
-/// <see cref="ErrorPosition"/> returns all of these packed into one <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see>
+/// <see cref="ErrorPosition">ParseResult.ErrorPosition</see> returns all of these packed into one <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see>
 /// struct, so callers that want more than one unit share the position work
 /// instead of paying a separate walk per property read. The same conversion is
 /// available on <see cref="InductorParser.SyntaxTree.Symbol.SourceRange">Symbol.SourceRange</see> for any node in the parse tree.
@@ -41,8 +41,8 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Returns the shape of this result: success, grammar mismatch, or
-    /// which budget tripped. Always check this (or <see cref="Success"/>)
-    /// before reading <see cref="Tree"/> / <see cref="Symbols"/>.
+    /// which budget tripped. Always check this (or <see cref="Success">ParseResult.Success</see>)
+    /// before reading <see cref="Tree">ParseResult.Tree</see> / <see cref="Symbols">ParseResult.Symbols</see>.
     /// </summary>
     /// <remarks>See <see cref="ParseOutcome"/> for the full list.</remarks>
     public ParseOutcome Outcome { get; }
@@ -52,10 +52,10 @@ public readonly struct ParseResult
     /// and on a default-constructed ParseResult.
     /// </summary>
     /// <remarks>
-    /// On <see cref="InductorParser.ParseOutcome.GrammarMismatch">GrammarMismatch</see>, either the innermost <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">WithError</see> message set by the
+    /// On <see cref="InductorParser.ParseOutcome.GrammarMismatch">ParseOutcome.GrammarMismatch</see>, either the innermost <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">Rule.WithError</see> message set by the
     /// grammar or a generated "Unexpected 'x' at line L, column C" fallback. On
-    /// <see cref="InductorParser.ParseOutcome.MalformedInput">MalformedInput</see>, the message from
-    /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
+    /// <see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see>, the message from
+    /// <see cref="ParseOptions.MalformedInputTemplate">ParseOptions.MalformedInputTemplate</see>. On a budget abort, the
     /// matching "Parse aborted: ..." string. See: <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>
     /// </remarks>
     public string ErrorMessage => _errorMessage ?? string.Empty;
@@ -74,13 +74,13 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Convenience accessor for the common "root is a single Symbol" case.
-    /// Returns <see cref="Symbols"/>[0] if there's exactly one top-level
+    /// Returns <see cref="Symbols">ParseResult.Symbols</see>[0] if there's exactly one top-level
     /// Symbol, null otherwise.
     /// </summary>
     /// <remarks>
     /// Callers that know their root has <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> (the common case
     /// for named grammars) can keep using this. For grammars whose root
-    /// produces multiple top-level Symbols, use <see cref="Symbols"/> directly.
+    /// produces multiple top-level Symbols, use <see cref="Symbols">ParseResult.Symbols</see> directly.
     /// </remarks>
     public Symbol? Tree =>
         _symbols != null && _symbols.Count == 1 ? _symbols[0] : null;
@@ -103,13 +103,15 @@ public readonly struct ParseResult
     /// input before matching. The parser translates positions back to your
     /// original input before reporting them, and every other position on this
     /// result is derived from this one, so they're all in those coordinates.
+    /// See <a href="../docs/MappingPositionsAfterNormalization.md">Mapping Positions Through Unicode Normalization</a>
+    /// for how this translation works.
     /// </para>
     /// </remarks>
     public int ErrorCharIndex { get; }
 
     /// <summary>
     /// Error position's zero-based line number. Computed lazily from
-    /// <see cref="ErrorCharIndex"/> and the original input.
+    /// <see cref="ErrorCharIndex">ParseResult.ErrorCharIndex</see> and the original input.
     /// </summary>
     /// <remarks>
     /// Line breaks follow <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6), the same set <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
@@ -117,7 +119,7 @@ public readonly struct ParseResult
     /// LS (U+2028), PS (U+2029). That's a superset of the LF, CRLF, and lone CR
     /// a Language Server Protocol client recognizes, so the number matches an
     /// editor on ordinary source and diverges only on the rarer terminators.
-    /// Keeping it aligned with <see cref="InductorParser.Rules.EndOfLine">EndOfLine()</see> means every terminator a grammar
+    /// Keeping it aligned with <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> means every terminator a grammar
     /// consumes also bumps the reported line. See <see cref="SourcePosition"/> for the same
     /// alignment note.
     /// </remarks>
@@ -133,7 +135,7 @@ public readonly struct ParseResult
     /// <summary>
     /// Error position's zero-based column within the line, measured in chars (UTF-16
     /// code units, the Language Server Protocol unit). Computed lazily from
-    /// <see cref="ErrorCharIndex"/> and the original input.
+    /// <see cref="ErrorCharIndex">ParseResult.ErrorCharIndex</see> and the original input.
     /// </summary>
     public int ErrorCharColumn
     {
@@ -146,16 +148,16 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Error position's zero-based column within the line, measured in tokens
-    /// (Unicode graphemes). Computed lazily from <see cref="ErrorCharIndex"/> and
+    /// (Unicode graphemes). Computed lazily from <see cref="ErrorCharIndex">ParseResult.ErrorCharIndex</see> and
     /// the original input.
     /// </summary>
     /// <remarks>
-    /// The human-facing counterpart to <see cref="ErrorCharColumn"/>: an emoji, a
+    /// The human-facing counterpart to <see cref="ErrorCharColumn">ParseResult.ErrorCharColumn</see>: an emoji, a
     /// flag, or a base character plus a combining mark earlier on the line counts
     /// as one column, not as its several UTF-16 code units, so the number matches
     /// the character a person sees. This is the unit the default error message
     /// reports (via the {tokenColumnNumber} template placeholder). Use
-    /// <see cref="ErrorCharColumn"/> instead to match an editor or a Language
+    /// <see cref="ErrorCharColumn">ParseResult.ErrorCharColumn</see> instead to match an editor or a Language
     /// Server Protocol client, which count columns in chars.
     /// </remarks>
     public int ErrorTokenColumn =>
@@ -164,7 +166,7 @@ public readonly struct ParseResult
     /// <summary>
     /// Error position in tokens (Unicode graphemes), using the
     /// same <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> grapheme segmentation the lexer uses. Computed lazily
-    /// from <see cref="ErrorCharIndex"/>.
+    /// from <see cref="ErrorCharIndex">ParseResult.ErrorCharIndex</see>.
     /// </summary>
     public int ErrorTokenIndex =>
         SourcePositionConverter.ToTokenIndex(_input ?? string.Empty, ErrorCharIndex);
@@ -184,8 +186,8 @@ public readonly struct ParseResult
             : SourcePosition.From(_input ?? string.Empty, ErrorCharIndex);
 
     /// <summary>
-    /// True when <see cref="Outcome"/> is Success, false otherwise. Most callers
-    /// check this first and only inspect <see cref="Tree"/> / <see cref="Symbols"/>
+    /// True when <see cref="Outcome">ParseResult.Outcome</see> is Success, false otherwise. Most callers
+    /// check this first and only inspect <see cref="Tree">ParseResult.Tree</see> / <see cref="Symbols">ParseResult.Symbols</see>
     /// when it's true.
     /// </summary>
     /// <remarks>
@@ -257,13 +259,13 @@ public readonly struct ParseResult
     public string? DisplayNameOf(SymbolId id) => _grammar?.NameOf(id);
 
     /// <summary>
-    /// Convenience form of <see cref="DisplayNameOf(SymbolId)"/> that takes a
+    /// Convenience form of <see cref="DisplayNameOf(SymbolId)">ParseResult.DisplayNameOf(SymbolId)</see> that takes a
     /// Symbol directly. Returns null if the symbol is null.
     /// </summary>
     public string? DisplayName(Symbol symbol) => symbol == null ? null : DisplayNameOf(symbol.Id);
 
     /// <summary>
-    /// Render the tree to a string for debug output. If <see cref="Symbols"/>
+    /// Render the tree to a string for debug output. If <see cref="Symbols">ParseResult.Symbols</see>
     /// has one element, prints that. Otherwise prints each top-level Symbol in
     /// order.
     /// </summary>
@@ -280,15 +282,15 @@ public readonly struct ParseResult
 
     /// <summary>
     /// The text of the surviving parse-tree nodes, concatenated into one
-    /// string. <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>'d nodes (whitespace, delimiters) drop out, so this is the
+    /// string. <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>'d nodes (whitespace, delimiters) drop out, so this is the
     /// matched content, not the verbatim input. Returns the empty string on
     /// failure and on a default-constructed ParseResult.
     /// </summary>
     /// <remarks>
     /// Walks every top-level Symbol and concatenates its surviving leaf text.
     /// Mirrors <see cref="InductorParser.SyntaxTree.Symbol.ToString">Symbol.ToString()</see>, which does the same for one Symbol. For a
-    /// tree-shaped debug rendering, use <see cref="PrintTree"/> or
-    /// <see cref="ToDebugString"/>.
+    /// tree-shaped debug rendering, use <see cref="PrintTree">ParseResult.PrintTree()</see> or
+    /// <see cref="ToDebugString">ParseResult.ToDebugString()</see>.
     /// </remarks>
     public override string ToString()
     {
@@ -302,14 +304,14 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Debug-friendly rendering. On success, shows the parse tree (same output
-    /// as <see cref="PrintTree"/>) prefixed with "Success:". On failure, a
+    /// as <see cref="PrintTree">ParseResult.PrintTree()</see>) prefixed with "Success:". On failure, a
     /// one-line summary with the outcome, character index, and the error
     /// message.
     /// </summary>
     /// <remarks>
     /// A human-readable debug aid whose layout may change between versions.
-    /// Read <see cref="Outcome"/>, <see cref="Tree"/>, and
-    /// <see cref="ErrorMessage"/> directly rather than parsing this string.
+    /// Read <see cref="Outcome">ParseResult.Outcome</see>, <see cref="Tree">ParseResult.Tree</see>, and
+    /// <see cref="ErrorMessage">ParseResult.ErrorMessage</see> directly rather than parsing this string.
     /// </remarks>
     public string ToDebugString()
     {
@@ -353,14 +355,14 @@ public readonly struct ParseResult
     }
 
     /// <summary>
-    /// Build a grammar-mismatch result. Outcome is <see cref="InductorParser.ParseOutcome.GrammarMismatch">GrammarMismatch</see>, the error
+    /// Build a grammar-mismatch result. Outcome is <see cref="InductorParser.ParseOutcome.GrammarMismatch">ParseOutcome.GrammarMismatch</see>, the error
     /// fields have the deepest-failure message and position.
     /// </summary>
     public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
 
     /// <summary>
-    /// Build a malformed-input result. Outcome is <see cref="InductorParser.ParseOutcome.MalformedInput">MalformedInput</see>: the input
+    /// Build a malformed-input result. Outcome is <see cref="InductorParser.ParseOutcome.MalformedInput">ParseOutcome.MalformedInput</see>: the input
     /// couldn't be normalized to the grammar's form because it isn't well-formed
     /// Unicode. The error fields have the localized message and the offending
     /// character index. <see cref="InductorParser.Rule.Parse(System.String)">Rule.Parse</see> builds this in place of letting .NET's
@@ -372,7 +374,7 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Build a budget-abort result. Outcome is one of Timeout,
-    /// <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">RuleCountLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">DepthLimitExceeded</see>, or <see cref="InductorParser.ParseOutcome.Canceled">Canceled</see>. The error fields
+    /// <see cref="InductorParser.ParseOutcome.RuleCountLimitExceeded">ParseOutcome.RuleCountLimitExceeded</see>, <see cref="InductorParser.ParseOutcome.DepthLimitExceeded">ParseOutcome.DepthLimitExceeded</see>, or <see cref="InductorParser.ParseOutcome.Canceled">ParseOutcome.Canceled</see>. The error fields
     /// have the matching "Parse aborted: ..." message and the deepest-failure
     /// position so callers still get a "how far did we get" hint.
     /// </summary>

@@ -23,7 +23,7 @@ namespace InductorParser;
 /// A placeholder for a rule you can't reference yet. Use it when two rules
 /// refer to each other, so that no declaration order lets both see the
 /// other. Build the grammar with the placeholder in the recursive spot,
-/// then attach the real rule with <see cref="Bind"/>.
+/// then attach the real rule with <see cref="Bind">LateBoundRule.Bind(Rule)</see>.
 /// </summary>
 /// <remarks>
 /// The problem it solves shows up in any grammar with mutual recursion:
@@ -48,17 +48,17 @@ namespace InductorParser;
 /// <para>
 /// A LateBoundRule is transparent. At parse time it forwards to its target,
 /// and the parse tree shows the target's Symbol, never the placeholder's.
-/// Its <see cref="FlattenType"/> and <see cref="EmitsLeaf"/> come from the
+/// Its <see cref="FlattenType">LateBoundRule.FlattenType</see> and <see cref="EmitsLeaf">LateBoundRule.EmitsLeaf</see> come from the
 /// target too, so <c>Alias(lateBound)</c>, <c>And(x, lateBound, y)</c>, and
 /// every other composition behave exactly as if the target were written in
 /// its place. For the same reason the fluent modifiers don't apply to it:
-/// <see cref="As(string)"/>, <see cref="Flatten(FlattenType)"/>, and
-/// <see cref="WithError(string, bool)"/> throw, and you set those on the
+/// <see cref="As(string)">LateBoundRule.As(string)</see>, <see cref="Flatten(FlattenType)">LateBoundRule.Flatten(FlattenType)</see>, and
+/// <see cref="WithError(string, bool)">LateBoundRule.WithError(string, bool)</see> throw, and you set those on the
 /// target rule instead. The name passed to the constructor is only a label
 /// for trace output and error messages.
 /// </para>
 /// <para>
-/// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Compile</see> (or the first Parse, which compiles for you)
+/// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> (or the first Parse, which compiles for you)
 /// throws if a LateBoundRule was never bound, naming it by that label, so
 /// a forgotten Bind fails at startup instead of as a null reference deep
 /// inside a later parse.
@@ -145,8 +145,8 @@ public sealed class LateBoundRule : Rule
             "Compile the grammar first, then read FlattenType (Parse compiles for you).");
 
     /// <summary>
-    /// The bound target's <see cref="Rule.EmitsLeaf"/>. Reading this before
-    /// <see cref="Bind"/> throws rather than return a default that could
+    /// The bound target's <see cref="Rule.EmitsLeaf">Rule.EmitsLeaf</see>. Reading this before
+    /// <see cref="Bind">LateBoundRule.Bind(Rule)</see> throws rather than return a default that could
     /// turn out wrong once the target is attached.
     /// </summary>
     /// <exception cref="InvalidOperationException">
@@ -189,7 +189,7 @@ public sealed class LateBoundRule : Rule
         "(target.As(new SymbolId(...))).");
 
     /// <summary>
-    /// Not supported. A LateBoundRule's <see cref="FlattenType"/> forwards to
+    /// Not supported. A LateBoundRule's <see cref="FlattenType">LateBoundRule.FlattenType</see> forwards to
     /// the bound target, so a value set here would never take effect. Set
     /// <c>.Flatten(...)</c> on the target rule instead.
     /// </summary>
@@ -200,7 +200,7 @@ public sealed class LateBoundRule : Rule
         "Set .Flatten(...) on the target rule instead.");
 
     /// <summary>
-    /// Not supported, for the same reason as <see cref="Flatten(FlattenType)"/>:
+    /// Not supported, for the same reason as <see cref="Flatten(FlattenType)">LateBoundRule.Flatten(FlattenType)</see>:
     /// a flatten policy on a transparent forwarding rule is never consulted.
     /// Set it on the target rule instead.
     /// </summary>
@@ -239,10 +239,10 @@ public sealed class LateBoundRule : Rule
 
     /// <summary>
     /// Throws if this placeholder was never bound, then works out the
-    /// target's <see cref="FlattenType"/> for the compiled grammar.
+    /// target's <see cref="FlattenType">LateBoundRule.FlattenType</see> for the compiled grammar.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// <see cref="Bind"/> was never called, or the chain of bound rules
+    /// <see cref="Bind">LateBoundRule.Bind(Rule)</see> was never called, or the chain of bound rules
     /// never reaches a concrete rule.
     /// </exception>
     protected override void ValidateCompiled()

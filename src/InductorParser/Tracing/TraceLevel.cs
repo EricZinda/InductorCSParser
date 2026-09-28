@@ -1,7 +1,7 @@
 namespace InductorParser.Tracing;
 
 /// <summary>
-/// Controls how verbose the parser's trace output is when a <see cref="InductorParser.ParseOptions.TraceSink">TraceSink</see> is
+/// Controls how verbose the parser's trace output is when a <see cref="InductorParser.ParseOptions.TraceSink">ParseOptions.TraceSink</see> is
 /// wired up on ParseOptions.
 /// </summary>
 /// <remarks>

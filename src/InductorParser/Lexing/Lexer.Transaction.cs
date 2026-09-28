@@ -42,8 +42,8 @@ public sealed partial class Lexer
     // access legitimate without widening visibility.
     /// <summary>
     /// A speculative read scope. Code inside reads input freely. On
-    /// <see cref="Dispose"/> the lexer position rolls back to where the
-    /// transaction opened unless <see cref="Commit"/> was called first.
+    /// <see cref="Dispose">Lexer.Transaction.Dispose()</see> the lexer position rolls back to where the
+    /// transaction opened unless <see cref="Commit">Lexer.Transaction.Commit()</see> was called first.
     /// </summary>
     public struct Transaction : IDisposable
     {
@@ -59,7 +59,7 @@ public sealed partial class Lexer
 
         /// <summary>
         /// The lexer position at the moment this transaction opened. Rules
-        /// pass this to <see cref="InductorParser.Lexing.Lexer.RecordFailure(System.Int32,System.String,System.Boolean)">RecordFailure</see> as the pre-read offset where the
+        /// pass this to <see cref="InductorParser.Lexing.Lexer.RecordFailure(System.Int32,System.String,System.Boolean)">Lexer.RecordFailure</see> as the pre-read offset where the
         /// offending input starts.
         /// </summary>
         public int StartPosition => _savedPosition;
@@ -76,14 +76,14 @@ public sealed partial class Lexer
 
         /// <summary>
         /// Succeeds the transaction: the lexer keeps the position its children
-        /// advanced it to, and <see cref="Dispose"/> won't roll it back.
+        /// advanced it to, and <see cref="Dispose">Lexer.Transaction.Dispose()</see> won't roll it back.
         /// </summary>
         /// <remarks>
         /// Commit does nothing to the failure tracker. Failures survive both
         /// commit and rollback. A rejected Or branch or a count rule's stopped
         /// iteration is real evidence about the input and is kept, ranked by
         /// depth like any other failure. The one exception is lookahead, which
-        /// is what <see cref="InductorParser.Lexing.Lexer.BeginProbe">BeginProbe</see> is for: a Probe restores the failure tracker and
+        /// is what <see cref="InductorParser.Lexing.Lexer.BeginProbe">Lexer.BeginProbe</see> is for: a Probe restores the failure tracker and
         /// subtree-extent mark as well as the position. See
         /// <a href="../docs/ErrorArchitecture.md">Error Reporting Architecture</a>.
         /// </remarks>
@@ -95,7 +95,7 @@ public sealed partial class Lexer
 
         /// <summary>
         /// Rolls the lexer position back to where this transaction opened and
-        /// marks it settled, so the later <see cref="Dispose"/> is a no-op.
+        /// marks it settled, so the later <see cref="Dispose">Lexer.Transaction.Dispose()</see> is a no-op.
         /// </summary>
         public void Rollback()
         {
@@ -110,7 +110,7 @@ public sealed partial class Lexer
         /// settled.
         /// </summary>
         /// <remarks>
-        /// If <see cref="Commit"/> or <see cref="Rollback"/> already ran, the
+        /// If <see cref="Commit">Lexer.Transaction.Commit()</see> or <see cref="Rollback">Lexer.Transaction.Rollback()</see> already ran, the
         /// position is left alone. Either way Dispose pops the depth counter
         /// that drives trace indentation and merges this transaction's deepest
         /// failure back into the enclosing one. The pop waits until the scope

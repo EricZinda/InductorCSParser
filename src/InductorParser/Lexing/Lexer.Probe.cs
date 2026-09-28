@@ -28,8 +28,8 @@ public sealed partial class Lexer
         /// The lexer position at the moment this probe opened.
         /// </summary>
         /// <remarks>
-        /// Rules pass this to <see cref="InductorParser.Lexing.Lexer.RecordFailure(System.Int32,System.String,System.Boolean)">RecordFailure</see> as the "pre-read" offset,
-        /// the same way <see cref="Transaction.StartPosition"/> is used.
+        /// Rules pass this to <see cref="InductorParser.Lexing.Lexer.RecordFailure(System.Int32,System.String,System.Boolean)">Lexer.RecordFailure</see> as the "pre-read" offset,
+        /// the same way <see cref="Transaction.StartPosition">Lexer.Transaction.StartPosition</see> is used.
         /// </remarks>
         public int StartPosition => _savedPosition;
 
@@ -54,7 +54,7 @@ public sealed partial class Lexer
         public void Commit() => _committed = true;
 
         /// <summary>
-        /// When called without a prior <see cref="Commit"/>, restores the
+        /// When called without a prior <see cref="Commit">Lexer.Probe.Commit()</see>, restores the
         /// read position, the failure tracker, and the subtree-extent mark
         /// to where they were when the probe opened.
         /// </summary>

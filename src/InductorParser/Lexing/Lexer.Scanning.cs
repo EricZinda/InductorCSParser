@@ -17,8 +17,8 @@ public sealed partial class Lexer
     /// <remarks>
     /// <paramref name="set"/> must be rune-only. For a set that contains
     /// multi-rune entries (CRLF, ZWJ emoji, etc.), use
-    /// <see cref="AdvanceWhileTokenIn"/> instead, or check
-    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> yourself and call
+    /// <see cref="AdvanceWhileTokenIn">Lexer.AdvanceWhileTokenIn(TokenSet)</see> instead, or check
+    /// <see cref="TokenSet.HasMultiRuneGraphemes">TokenSet.HasMultiRuneGraphemes</see> yourself and call
     /// whichever one fits.
     /// </remarks>
     /// <exception cref="ArgumentException">
@@ -91,9 +91,9 @@ public sealed partial class Lexer
     /// the number of tokens consumed.
     /// </summary>
     /// <remarks>
-    /// For rune-only sets, <see cref="AdvanceWhileRuneIn"/> is faster
+    /// For rune-only sets, <see cref="AdvanceWhileRuneIn">Lexer.AdvanceWhileRuneIn(TokenSet)</see> is faster
     /// (it can skip the multi-rune membership check). Branch on
-    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> to pick.
+    /// <see cref="TokenSet.HasMultiRuneGraphemes">TokenSet.HasMultiRuneGraphemes</see> to pick.
     /// </remarks>
     public int AdvanceWhileTokenIn(TokenSet set)
     {

@@ -73,8 +73,8 @@ public sealed partial class Lexer
     }
 
     /// <summary>
-    /// True when the failure <see cref="DeepestFailureMessage"/> would
-    /// surface is a forced <see cref="Rule.WithError"/> override.
+    /// True when the failure <see cref="DeepestFailureMessage">Lexer.DeepestFailureMessage</see> would
+    /// surface is a forced <see cref="Rule.WithError">Rule.WithError(string, bool)</see> override.
     /// </summary>
     public bool DeepestFailureIsForced => _failureState.ForcedMessage != null;
 
@@ -89,7 +89,7 @@ public sealed partial class Lexer
     /// <param name="position">The start of the specific read that failed, not the post-read lexer position.</param>
     /// <param name="errorMessage">The named message to attach,
     /// or null for a mechanical failure.</param>
-    /// <param name="forced">True for a forced <see cref="Rule.WithError"/> override
+    /// <param name="forced">True for a forced <see cref="Rule.WithError">Rule.WithError(string, bool)</see> override
     /// that beats every non-forced failure regardless of depth.</param>
     public void RecordFailure(int position, string? errorMessage = null, bool forced = false)
     {
@@ -159,7 +159,7 @@ public sealed partial class Lexer
     }
 
     /// <summary>
-    /// Record a composite rule's <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">.WithError</see> failure at whichever is
+    /// Record a composite rule's <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">Rule.WithError</see> failure at whichever is
     /// further into the input: <paramref name="floorPosition"/> or the
     /// deepest position any child of the composite reached.
     /// </summary>
@@ -170,7 +170,7 @@ public sealed partial class Lexer
     /// own, usually its start position or the current lexer position.</param>
     /// <param name="errorMessage">The named or forced message to attach,
     /// or null for a mechanical failure.</param>
-    /// <param name="forced">True for a forced <see cref="Rule.WithError"/> override.</param>
+    /// <param name="forced">True for a forced <see cref="Rule.WithError">Rule.WithError(string, bool)</see> override.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RecordCompositeFailure(int floorPosition, string? errorMessage, bool forced)
         => RecordFailure(Math.Max(_subtreeDeepestFailure, floorPosition), errorMessage, forced);

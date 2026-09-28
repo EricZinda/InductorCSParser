@@ -66,7 +66,7 @@ internal static class DisplayEscape
 
     /// <summary>
     /// Return an escaped copy of <paramref name="source"/>[<paramref name="offset"/>..<paramref name="offset"/>+<paramref name="length"/>].
-    /// Falls back to a plain <see cref="string.Substring(int)">Substring</see> when no chars need escape,
+    /// Falls back to a plain <see cref="string.Substring(int)">string.Substring</see> when no chars need escape,
     /// so the common single-printable-rune case allocates nothing past
     /// the substring itself.
     /// </summary>

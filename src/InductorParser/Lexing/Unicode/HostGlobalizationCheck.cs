@@ -21,7 +21,7 @@ internal enum HostGlobalizationStatus
 
     /// <summary>
     /// Invariant globalization: string.Normalize returns its input
-    /// unchanged and <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">IsNormalized</see> always reports true.
+    /// unchanged and <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">NormalizationHelpers.IsNormalized</see> always reports true.
     /// </summary>
     Invariant,
 
@@ -46,11 +46,11 @@ internal enum HostGlobalizationStatus
 /// anything, and they belong to the host app, so a parser embedded in
 /// someone else's app inherits whatever that app chose. When the
 /// Runtime implementation is active, <c>UnicodeNormalization</c> calls
-/// <see cref="EnsureRuntimeNormalizationIsTrustworthy"/> before every
-/// runtime-path Normalize or <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">IsNormalized</see>, and the first normalizing
-/// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> or Parse in an affected process throws an actionable
+/// <see cref="EnsureRuntimeNormalizationIsTrustworthy">HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy(string)</see> before every
+/// runtime-path Normalize or <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">NormalizationHelpers.IsNormalized</see>, and the first normalizing
+/// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> or Parse in an affected process throws an actionable
 /// <see cref="InvalidOperationException"/> instead of quietly parsing
-/// differently. <see cref="UnicodeEnvironment.AcceptHostGlobalization"/>
+/// differently. <see cref="UnicodeEnvironment.AcceptHostGlobalization">UnicodeEnvironment.AcceptHostGlobalization</see>
 /// is the deliberate opt-out.
 /// </summary>
 internal static class HostGlobalizationCheck
@@ -82,7 +82,7 @@ internal static class HostGlobalizationCheck
     /// Throws <see cref="InvalidOperationException"/> if the host's
     /// globalization configuration makes the runtime's string.Normalize
     /// untrustworthy and
-    /// <see cref="UnicodeEnvironment.AcceptHostGlobalization"/> hasn't
+    /// <see cref="UnicodeEnvironment.AcceptHostGlobalization">UnicodeEnvironment.AcceptHostGlobalization</see> hasn't
     /// opted in. Unnormalizable <paramref name="input"/> throws the
     /// public API's <see cref="ArgumentException"/> instead, so argument
     /// validation wins over host state, the same precedence the

@@ -12,7 +12,7 @@ namespace InductorParser;
 
 /// <summary>
 /// The base of everything in a grammar. A grammar is a tree of Rule objects:
-/// composites like And/Or/<see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">OneOrMore</see> hold other Rules, leaves like Token/<see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see>
+/// composites like And/Or/<see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see> hold other Rules, leaves like Token/<see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>
 /// sit at the bottom, and the root is whatever Rule you hand to Parse().
 /// Calling Parse on the root walks the tree and tries to match the input.
 /// </summary>
@@ -29,16 +29,16 @@ namespace InductorParser;
 ///     var settingName = OneOrMore(OneOf(TokenSet.Letters))
 ///         .As(nameof(settingName));
 /// </code>
-/// .As(name) silently flips the rule's FlattenType to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> if it hasn't
-/// been set explicitly, so a named rule is findable by <see cref="InductorParser.SyntaxTree.Symbol.Find(InductorParser.SyntaxTree.SymbolId)">Tree.Find</see> without the
-/// caller adding .Preserve() by hand. .Flatten(non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see>) after .As (or .As
-/// after .Flatten(non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see>)) throws, since the two requests contradict each
-/// other: a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> rule's Symbol doesn't reach the tree, so naming it for
+/// .As(name) silently flips the rule's FlattenType to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> if it hasn't
+/// been set explicitly, so a named rule is findable by <see cref="InductorParser.SyntaxTree.Symbol.Find(InductorParser.SyntaxTree.SymbolId)">Symbol.Find</see> without the
+/// caller adding .Preserve() by hand. .Flatten(non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>) after .As (or .As
+/// after .Flatten(non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>)) throws, since the two requests contradict each
+/// other: a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> rule's Symbol doesn't reach the tree, so naming it for
 /// Find is meaningless.
 /// </para>
 /// <para>
-/// Rules are effectively immutable. Before <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> runs, you can call the
-/// modifier methods. After <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> runs (either explicitly via .Compile() or
+/// Rules are effectively immutable. Before <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> runs, you can call the
+/// modifier methods. After <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> runs (either explicitly via .Compile() or
 /// automatically on the first .Parse() call) the Rule is sealed and any further
 /// modification throws InvalidOperationException. A compiled rule is immutable,
 /// so any number of threads can Parse it at once with no synchronization.
@@ -49,7 +49,7 @@ namespace InductorParser;
 /// <para>
 /// Rule is abstract. The library's composite and leaf rules (AndRule, OrRule,
 /// GraphemeRule, etc.) subclass it. User code can subclass Rule too if it needs
-/// matching logic the built-in rules can't express. See <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">TryParseRule</see> for the
+/// matching logic the built-in rules can't express. See <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see> for the
 /// full subclass rules.
 /// </para>
 /// </remarks>
@@ -92,7 +92,7 @@ public abstract class Rule
 
     /// <summary>
     /// The Unicode normalization form this grammar was compiled against, or
-    /// null if normalization is disabled. Set during <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> and read by Parse
+    /// null if normalization is disabled. Set during <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> and read by Parse
     /// to normalize the input string before lexing. Exposed so callers and
     /// tests can introspect a compiled grammar.
     /// </summary>
@@ -119,20 +119,20 @@ public abstract class Rule
 
     /// <summary>
     /// The rule's <see cref="SymbolId"/>, the integer identity parse-tree
-    /// Symbols store. Assigned at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> time unless set explicitly with
-    /// <see cref="As(SymbolId)"/>. A single-rune Token's id is its code point.
+    /// Symbols store. Assigned at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> time unless set explicitly with
+    /// <see cref="As(SymbolId)">Rule.As(SymbolId)</see>. A single-rune Token's id is its code point.
     /// </summary>
     public SymbolId Id { get; private set; }
 
     /// <summary>
-    /// The name set with <see cref="As(string)"/>, or null if the rule is
-    /// anonymous. Used by <see cref="InductorParser.SyntaxTree.Symbol.Find(InductorParser.SyntaxTree.SymbolId)">Tree.Find</see>, <see cref="NameOf"/>, and trace output.
+    /// The name set with <see cref="As(string)">Rule.As(string)</see>, or null if the rule is
+    /// anonymous. Used by <see cref="InductorParser.SyntaxTree.Symbol.Find(InductorParser.SyntaxTree.SymbolId)">Symbol.Find</see>, <see cref="NameOf">Rule.NameOf(SymbolId)</see>, and trace output.
     /// </summary>
     public string? Name { get; private set; }
 
     /// <summary>
     /// How this rule's successful match contributes to the parse tree
-    /// (<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> / <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> / Flatten). See the
+    /// (<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> / <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> / Flatten). See the
     /// <see cref="SyntaxTree.FlattenType"/> enum for what each value means.
     /// </summary>
     /// <remarks>
@@ -152,7 +152,7 @@ public abstract class Rule
     /// <summary>
     /// The FlattenType stored on this rule itself, bypassing a getter
     /// override that forwards another rule's value. Rules that don't
-    /// override <see cref="FlattenType"/> can ignore this: for them the
+    /// override <see cref="FlattenType">Rule.FlattenType</see> can ignore this: for them the
     /// two are the same value.
     /// </summary>
     /// <remarks>
@@ -160,8 +160,8 @@ public abstract class Rule
     /// forwarding its inner) overrides the FlattenType getter, and then
     /// needs this to read what was set on the rule itself. .As(...) reads
     /// it (via ApplyIdentificationFlattenPolicy) to decide whether it
-    /// still needs to flip the policy to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see>: on an unnamed alias
-    /// over a <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> inner the virtual getter already reports <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see>
+    /// still needs to flip the policy to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>: on an unnamed alias
+    /// over a <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> inner the virtual getter already reports <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>
     /// while the alias's own policy is still Flatten, and skipping the
     /// flip there would leave the alias transparent with a dead name.
     /// </remarks>
@@ -186,7 +186,7 @@ public abstract class Rule
 
     /// <summary>
     /// emitsLeaf is required (no default overload) so a new rule can't
-    /// silently get the wrong shape. See the <see cref="InductorParser.Rule.EmitsLeaf">EmitsLeaf</see> property for what
+    /// silently get the wrong shape. See the <see cref="InductorParser.Rule.EmitsLeaf">Rule.EmitsLeaf</see> property for what
     /// it means and how to choose it.
     /// </summary>
     protected Rule(FlattenType defaultFlatten, bool emitsLeaf, params Rule[]? children)
@@ -200,15 +200,15 @@ public abstract class Rule
     private readonly bool _emitsLeaf;
 
     /// <summary>
-    /// True when <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">TryParseRule</see> emits a single leaf Symbol with the matched
-    /// text (leaves: <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see>, Literal, <see cref="InductorParser.Rules.AnyToken">AnyToken</see>, <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">ScanWhile</see>, <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see>, ...).
+    /// True when <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see> emits a single leaf Symbol with the matched
+    /// text (leaves: <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>, Literal, <see cref="InductorParser.Rules.AnyToken">Rules.AnyToken</see>, <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">Rules.ScanWhile</see>, <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see>, ...).
     /// False when it emits a composite Symbol with children (And, Or,
-    /// <see cref="InductorParser.Rules.BetweenInclusive(System.Int32,System.Int32,InductorParser.Rule)">BetweenInclusive</see>) or no Symbol at all because it's zero-width (Not, Peek,
+    /// <see cref="InductorParser.Rules.BetweenInclusive(System.Int32,System.Int32,InductorParser.Rule)">Rules.BetweenInclusive</see>) or no Symbol at all because it's zero-width (Not, Peek,
     /// Eof).
     /// </summary>
     /// <remarks>
     /// This is the output Symbol's shape, not the count of child rules:
-    /// <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see> holds an inner rule but still emits one leaf. If the shape
+    /// <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see> holds an inner rule but still emits one leaf. If the shape
     /// isn't fixed for the subclass, pass false to the constructor and override
     /// this to compute it (AliasRule and LateBoundRule do).
     /// </remarks>
@@ -332,12 +332,12 @@ public abstract class Rule
     private static readonly IReadOnlyList<Rule> NoChildren = Array.Empty<Rule>();
 
     /// <summary>
-    /// The child rules this rule is built from. Composites (And, Or, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">OneOrMore</see>,
+    /// The child rules this rule is built from. Composites (And, Or, <see cref="InductorParser.Rules.OneOrMore(InductorParser.Rule)">Rules.OneOrMore</see>,
     /// etc.) pass their children to the base constructor and access them here.
-    /// Leaf rules (Token, <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see>, Eof) have none and get a shared empty list.
+    /// Leaf rules (Token, <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see>, Eof) have none and get a shared empty list.
     /// </summary>
     /// <remarks>
-    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> walks this list to assign ids and seal every reachable rule.
+    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> walks this list to assign ids and seal every reachable rule.
     /// Exposed so external tools (visualizers, doc generators, tests) can walk
     /// the rule graph the same way <see cref="InductorParser.SyntaxTree.Symbol.Children">Symbol.Children</see> lets them walk the parse
     /// tree. The <see cref="System.Collections.Generic.IReadOnlyList{T}">IReadOnlyList&lt;Rule&gt;</see> return type lets external
@@ -387,9 +387,9 @@ public abstract class Rule
     /// <remarks>
     /// ThrowIfSealed keeps the trace name a grammar-construction-time setting:
     /// once the grammar is compiled and sealed, a rename throws rather than
-    /// silently changing the trace label, the <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">NameOf</see> fallback for an unnamed
+    /// silently changing the trace label, the <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">Rule.NameOf</see> fallback for an unnamed
     /// rule, and diagnostic text under a live grammar. The constructor callers
-    /// run before <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> seals the rule, so they pass the check. Trace output
+    /// run before <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> seals the rule, so they pass the check. Trace output
     /// reads _ruleTraceName as a plain field load, so setting it stays a
     /// one-time cost.
     /// </remarks>
@@ -418,20 +418,20 @@ public abstract class Rule
 
     /// <summary>
     /// Attach a debug/trace name and make the rule findable by that name
-    /// (<see cref="InductorParser.SyntaxTree.Symbol.Find(InductorParser.SyntaxTree.SymbolId)">Tree.Find</see>, <see cref="InductorParser.ParseResult">ParseResult</see> lookups). Returns the same Rule for fluent
+    /// (<see cref="InductorParser.SyntaxTree.Symbol.Find(InductorParser.SyntaxTree.SymbolId)">Symbol.Find</see>, <see cref="InductorParser.ParseResult">ParseResult</see> lookups). Returns the same Rule for fluent
     /// chaining. Throws InvalidOperationException if the rule has already been
-    /// compiled, or if it was already named (<see cref="As(string)"/> is
+    /// compiled, or if it was already named (<see cref="As(string)">Rule.As(string)</see> is
     /// set-once).
     /// </summary>
     /// <remarks>
     /// Naming a rule only works if its Symbol reaches the parse tree, which
     /// happens under <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>. So, if the flatten policy is anything else, .As
-    /// tries to change it to Preserve. However, if the caller already set a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see>
+    /// tries to change it to Preserve. However, if the caller already set a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>
     /// policy explicitly via .Flatten(...) / .Delete() / .Flatten(), .As throws
     /// rather than silently overriding that choice.
     /// <para>
     /// Set-once for the string Name overload: a rule that already has a name can't be renamed. A second call throws instead.
-    /// <see cref="As(SymbolId)"/> writes a different field (Id, not Name) and
+    /// <see cref="As(SymbolId)">Rule.As(SymbolId)</see> writes a different field (Id, not Name) and
     /// composes with this: a rule with an explicit id can still pick up a name,
     /// and a named rule can still pick up an explicit id. Only same-overload
     /// repeats are bugs.
@@ -481,16 +481,16 @@ public abstract class Rule
     /// <remarks>
     /// Setting an id for a rule only works if its Symbol reaches the parse tree, which
     /// happens under <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>. So, if the flatten policy is anything else, .As
-    /// tries to change it to Preserve. However, if the caller already set a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see>
+    /// tries to change it to Preserve. However, if the caller already set a non-<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>
     /// policy explicitly via .Flatten(...) / .Flatten() / .Delete(), .As throws
     /// rather than silently overriding that choice.
     /// <para>
-    /// The value must land in the custom range (&gt;= <see cref="InductorParser.SyntaxTree.SymbolRanges.CustomRangeStart">CustomRangeStart</see>). A lower
+    /// The value must land in the custom range (&gt;= <see cref="InductorParser.SyntaxTree.SymbolRanges.CustomRangeStart">SymbolRanges.CustomRangeStart</see>). A lower
     /// value throws. The ranges below it would collide with auto-assigned ids
     /// if a rule reused one: 0..0x10FFFF go to Unicode rune
     /// leaves (e.g. Token('a')), and 0x110000..0x1FFFFF is reserved for future
     /// built-in ids and is unused today (anonymous rules get custom-range ids
-    /// at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>).
+    /// at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>).
     /// </para>
     /// </remarks>
     public virtual Rule As(SymbolId id)
@@ -543,7 +543,7 @@ public abstract class Rule
 
     /// <summary>
     /// Explicit-<see cref="SymbolId"/> variant of
-    /// <see cref="AliasedAs(string)"/>: create a fresh alias around this rule, with the
+    /// <see cref="AliasedAs(string)">Rule.AliasedAs(string)</see>: create a fresh alias around this rule, with the
     /// explicit id on the alias.
     /// </summary>
     public Rule AliasedAs(SymbolId id) => new AliasRule(this).As(id);
@@ -597,13 +597,13 @@ public abstract class Rule
             : Id;
 
     /// <summary>
-    /// Set the flatten policy (<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> / <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> / Flatten) that controls how
+    /// Set the flatten policy (<see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> / <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> / Flatten) that controls how
     /// this rule contributes to the parse tree on a successful match. Returns
     /// the same Rule for fluent chaining. Throws if already compiled. See the
     /// <see cref="SyntaxTree.FlattenType"/> enum for what each value means.
     /// </summary>
     /// <remarks>
-    /// Setting to anything but <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> on a rule already identified with
+    /// Setting to anything but <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> on a rule already identified with
     /// .As(name) or .As(SymbolId) throws since the whole point of
     /// them is to make the Symbol findable. 
     /// </remarks>
@@ -637,28 +637,28 @@ public abstract class Rule
     // .Preserve(), .Delete(), or .Flatten(). Read by ApplyIdentificationFlattenPolicy.
     private bool _flattenPolicyExplicitlySet;
 
-    /// <summary>Shortcut for <see cref="Flatten(FlattenType)"/> with <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>.</summary>
+    /// <summary>Shortcut for <see cref="Flatten(FlattenType)">Rule.Flatten(FlattenType)</see> with <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>.</summary>
     public Rule Preserve() => Flatten(FlattenType.Preserve);
 
-    /// <summary>Shortcut for <see cref="Flatten(FlattenType)"/> with <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>.</summary>
+    /// <summary>Shortcut for <see cref="Flatten(FlattenType)">Rule.Flatten(FlattenType)</see> with <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>.</summary>
     public Rule Delete() => Flatten(FlattenType.Delete);
 
-    /// <summary>Shortcut for <see cref="Flatten(FlattenType)"/> with <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>.</summary>
+    /// <summary>Shortcut for <see cref="Flatten(FlattenType)">Rule.Flatten(FlattenType)</see> with <see cref="InductorParser.SyntaxTree.FlattenType.Flatten">FlattenType.Flatten</see>.</summary>
     public Rule Flatten() => Flatten(FlattenType.Flatten);
 
     /// <summary>
     /// Set the FlattenType as an overridable default, the way a rule's class
     /// default behaves, rather than the locked-in choice
-    /// <see cref="Flatten(FlattenType)"/> records. Meant for composing factories.
+    /// <see cref="Flatten(FlattenType)">Rule.Flatten(FlattenType)</see> records. Meant for composing factories.
     /// </summary>
     /// <remarks>
     /// The difference is for the factory's caller. Flatten(...) marks the policy
     /// user-explicit, so a later .As(name) on the returned rule throws, which the
     /// caller (who never wrote .Flatten / .Delete) can't anticipate.
-    /// <see cref="InductorParser.Rule.FlattenByDefault(InductorParser.SyntaxTree.FlattenType)">FlattenByDefault</see> sets the same value but stays overridable, so .As(name)
+    /// <see cref="InductorParser.Rule.FlattenByDefault(InductorParser.SyntaxTree.FlattenType)">Rule.FlattenByDefault</see> sets the same value but stays overridable, so .As(name)
     /// and a later .Flatten(...) work as they would on a rule at its class
     /// default. The built-in composing factories (<see cref="InductorParser.Rules.EndOfLine(System.Boolean)">Rules.EndOfLine</see>,
-    /// <see cref="InductorParser.Rules.InlineWhitespace">InlineWhitespace</see>, <see cref="InductorParser.Rules.AnyWhitespace">AnyWhitespace</see>) use it.
+    /// <see cref="InductorParser.Rules.InlineWhitespace">Rules.InlineWhitespace</see>, <see cref="InductorParser.Rules.AnyWhitespace">Rules.AnyWhitespace</see>) use it.
     /// </remarks>
     public virtual Rule FlattenByDefault(FlattenType type)
     {
@@ -669,7 +669,7 @@ public abstract class Rule
 
     /// <summary>
     /// Attach a static error message. If this rule has the deepest failure when a parse fails,
-    /// <see cref="ParseResult.ErrorMessage"/> is this string instead of the
+    /// <see cref="ParseResult.ErrorMessage">ParseResult.ErrorMessage</see> is this string instead of the
     /// generic "unexpected 'x'" fallback. Returns the same Rule for fluent
     /// chaining. Throws if already compiled.
     /// </summary>
@@ -713,7 +713,7 @@ public abstract class Rule
 
     /// <summary>
     /// Finalize the grammar using the default Unicode FormC normalization, shorthand for
-    /// <see cref="Compile(NormalizationForm?)"/> with FormC.
+    /// <see cref="Compile(NormalizationForm?)">Rule.Compile(NormalizationForm?)</see> with FormC.
     /// </summary>
     public Rule Compile() => Compile(System.Text.NormalizationForm.FormC);
 
@@ -723,13 +723,13 @@ public abstract class Rule
     /// that doesn't have one yet, validate each rule, convert its literal text to
     /// the chosen form, and seal the graph against further modification. Pass null
     /// to opt out of normalization entirely. Idempotent, and auto-invoked on the
-    /// first <see cref="Parse(string)"/>. Returns the same Rule for chaining.
+    /// first <see cref="Parse(string)">Rule.Parse(string)</see>. Returns the same Rule for chaining.
     /// </summary>
     /// <remarks>
     /// Call it explicitly when you want grammar-construction errors to surface at
     /// a particular location rather than at first parse, or if you are parsing on 
     /// multiple threads. The normalization form is committed at
-    /// first compile and applies to every parse afterward. A subsequent <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>
+    /// first compile and applies to every parse afterward. A subsequent <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>
     /// call with a different form throws InvalidOperationException: the form is
     /// part of the grammar's identity, not a per-parse option. Compilation is
     /// single-threaded, parsing is multi-threaded.
@@ -739,7 +739,7 @@ public abstract class Rule
     /// hash-of-name id in the custom range, linear-probing upward if the slot is
     /// taken. The same name produces the same slot every run, so a named rule's id
     /// is stable across program executions absent grammar changes. Third, anonymous
-    /// rules get sequential ids from <see cref="InductorParser.SyntaxTree.SymbolRanges.CustomRangeStart">CustomRangeStart</see>, probing past anything passes
+    /// rules get sequential ids from <see cref="InductorParser.SyntaxTree.SymbolRanges.CustomRangeStart">SymbolRanges.CustomRangeStart</see>, probing past anything passes
     /// one and two claimed.
     /// </para>
     /// <para>
@@ -747,14 +747,14 @@ public abstract class Rule
     /// chosen form in place. An author can type a literal in whatever form is
     /// convenient and it will be converted to the form chosen here for matching. 
     /// A precomposed 'é' written into the grammar will match a decomposed 'é' in
-    /// the input if FormD is chosen, because <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> rewrites the literal to match. This
+    /// the input if FormD is chosen, because <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> rewrites the literal to match. This
     /// removes the silent "rule never matches" failure mode where the literal's
     /// form and the input's form disagree.
     /// </para>
     /// <para>
     /// The normalization pass throws when a literal can't be represented in the
     /// chosen form: text the rejection scan flags (an unpaired surrogate, or U+FFFE), or a
-    /// single-grapheme slot (a <see cref="InductorParser.Rules.OneOf(System.String)">OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">NoneOf</see> set member or a single-rune Token)
+    /// single-grapheme slot (a <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">Rules.NoneOf</see> set member or a single-rune Token)
     /// whose conversion produces more than one grapheme (the single grapheme ligature 'ﬁ' becomes
     /// a two grapheme "fi" under FormKC). The exception lists every offender and how to fix it.
     /// </para>
@@ -888,10 +888,10 @@ public abstract class Rule
     /// <summary>
     /// Return the human-readable name for a <see cref="SymbolId"/> in this
     /// grammar, or null if the id isn't known. Auto-compiles if the grammar
-    /// hasn't been compiled yet, since ids aren't stable until <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> runs.
+    /// hasn't been compiled yet, since ids aren't stable until <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> runs.
     /// </summary>
     /// <remarks>
-    /// <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">NameOf</see> tries three things in order. A name from .As("foo") wins, whatever
+    /// <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">Rule.NameOf</see> tries three things in order. A name from .As("foo") wins, whatever
     /// the id is. Otherwise an id in the rune range (0..0x10FFFF) is a Unicode
     /// code point and returns that one character (0x41 returns "A", 0x1F3B8
     /// returns "🎸", a lone surrogate half returns null). Otherwise it's an
@@ -932,11 +932,11 @@ public abstract class Rule
     /// <summary>
     /// Return the user-supplied .As("name") name for <paramref name="id"/>, or
     /// null if the id has no user name. 
-    /// Auto-compiles, since ids aren't stable until <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> runs.
+    /// Auto-compiles, since ids aren't stable until <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> runs.
     /// </summary>
     /// <remarks>
-    /// Lets a tree walker distinguish "the user named this rule" from "<see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">NameOf</see>
-    /// returned something because it always returns something". <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">NameOf</see>'s
+    /// Lets a tree walker distinguish "the user named this rule" from "<see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">Rule.NameOf</see>
+    /// returned something because it always returns something". <see cref="InductorParser.Rule.NameOf(InductorParser.SyntaxTree.SymbolId)">Rule.NameOf</see>'s
     /// string-compare can't tell apart a user who happened to .As(...) the rule
     /// to the same string the default would have produced.
     /// </remarks>
@@ -958,7 +958,7 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Inverse of <see cref="NameOf"/>: takes the string the rule was
+    /// Inverse of <see cref="NameOf">Rule.NameOf(SymbolId)</see>: takes the string the rule was
     /// constructed with via .As("name") and returns the <see cref="SymbolId"/>
     /// the engine assigned, or null if no reachable rule has that name.
     /// Auto-compiles, so callers can cache the id at static-init time without
@@ -967,7 +967,7 @@ public abstract class Rule
     /// <remarks>
     /// Resolve a name to its id once, then compare ids while walking the tree.
     /// An id compare is an int compare, so it's faster than <see cref="InductorParser.SyntaxTree.Symbol.Is(string)">Symbol.Is(string)</see>,
-    /// which interns and looks up a string for every node. Use <see cref="InductorParser.Rule.IdOf(System.String)">IdOf</see> when you'll
+    /// which interns and looks up a string for every node. Use <see cref="InductorParser.Rule.IdOf(System.String)">Rule.IdOf</see> when you'll
     /// branch on the same name across many nodes. Use <see cref="InductorParser.SyntaxTree.Symbol.Is(string)">Symbol.Is(string)</see> when
     /// readability matters more than speed.
     /// <code>
@@ -1028,7 +1028,7 @@ public abstract class Rule
     /// <summary>
     /// Run the grammar against an input string with default options.
     /// Auto-compiles on the first call. See
-    /// <see cref="Parse(string, ParseOptions)"/> to pass options.
+    /// <see cref="Parse(string, ParseOptions)">Rule.Parse(string, ParseOptions)</see> to pass options.
     /// </summary>
     public ParseResult Parse(string input) => Parse(input, new ParseOptions());
 
@@ -1467,7 +1467,7 @@ public abstract class Rule
     /// <para>
     /// Rule.TryParse owns the outer transaction. It opens one before calling
     /// this method and commits it only when this method returns a non-null
-    /// Symbol, so a subclass never calls <see cref="InductorParser.Lexing.Lexer.BeginTransaction">BeginTransaction</see> or Commit for its own
+    /// Symbol, so a subclass never calls <see cref="InductorParser.Lexing.Lexer.BeginTransaction">Lexer.BeginTransaction</see> or Commit for its own
     /// outer scope and can't forget the commit. `startPosition` is the lexer
     /// position captured the moment that transaction opened. Use it for failure
     /// error positions and for the ReadOnlyMemory span of any Symbol you build.
@@ -1489,11 +1489,11 @@ public abstract class Rule
     /// </para>
     /// <para>
     /// On success, return a non-null Symbol whose form depends on
-    /// `effectiveFlattenType`. For <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see>, emit nothing and return
+    /// `effectiveFlattenType`. For <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>, emit nothing and return
     /// Symbol.Discarded. For Flatten, append each Symbol you would have
     /// collected to `outputSymbols` (the caller's list, guaranteed non-null) and
     /// return Symbol.Discarded. For a composite that would be each child's
-    /// Symbol, and for a leaf it's the leaf Symbol itself. For <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see>, build a
+    /// Symbol, and for a leaf it's the leaf Symbol itself. For <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see>, build a
     /// Symbol that wraps your matched child Symbols (or, for a leaf, the span of
     /// input you consumed) and return it.
     /// </para>
@@ -1506,13 +1506,13 @@ public abstract class Rule
     /// </para>
     /// <para>
     /// `outputSymbols` is non-null only in Flatten mode, where it's the
-    /// caller's list for you to append your child Symbols to. In <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> and
-    /// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> mode it's null.
+    /// caller's list for you to append your child Symbols to. In <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> and
+    /// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> mode it's null.
     /// </para>
     /// <para>
     /// If your rule wraps child rules, pass them to the base constructor as
-    /// `base(flattenType, children)`. The base stores them in the <see cref="InductorParser.Rule.Children">Children</see>
-    /// property, which is how <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see> discovers the grammar: it walks <see cref="InductorParser.Rule.Children">Children</see>
+    /// `base(flattenType, children)`. The base stores them in the <see cref="InductorParser.Rule.Children">Rule.Children</see>
+    /// property, which is how <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> discovers the grammar: it walks <see cref="InductorParser.Rule.Children">Rule.Children</see>
     /// to assign ids and seal every reachable rule. A child you don't pass to
     /// base is invisible to Compile.
     /// </para>
@@ -1547,19 +1547,19 @@ public abstract class Rule
     /// wrapping every rule gets, forwarding `outputSymbols` to it. Used both by
     /// composites assembling their children (And, Or, Alias, ...) and by rules
     /// that drive an inner rule as a lookahead or subroutine (Not, Peek,
-    /// <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">ScanUntil</see>, <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see>).
+    /// <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see>, <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see>).
     /// </summary>
     /// <remarks>
     /// Pass the list the inner should append its Flatten-mode children to, or
     /// null to discard them (lookahead and probes pass null). You don't have to
     /// check the inner's FlattenType first: TryParse ignores the list unless the
-    /// inner is Flatten, so passing one to a <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">Preserve</see> or <see cref="InductorParser.SyntaxTree.FlattenType.Delete">Delete</see> inner is harmless.
+    /// inner is Flatten, so passing one to a <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> or <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see> inner is harmless.
     /// </remarks>
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
         => child.TryParse(lexer, outputSymbols);
 
     /// <summary>
-    /// Builds the composite Symbol a rule returns from <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">TryParseRule</see>, taking
+    /// Builds the composite Symbol a rule returns from <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>, taking
     /// ownership of the children collection instead of copying it. Prefer this
     /// over `new Symbol(Id, FlattenType, children, ...)` on the parse hot path.
     /// That public constructor defensively copies the collection because it can't
@@ -1578,7 +1578,7 @@ public abstract class Rule
         => Symbol.FromOwnedChildren(Id, FlattenType, children, consumedSpan, context);
 
     /// <summary>
-    /// Subclass hook for <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>-time normalization-form validation. Each
+    /// Subclass hook for <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>-time normalization-form validation. Each
     /// rule that holds user-supplied text the parser will compare against
     /// normalized input overrides this to walk its own data: it reports any
     /// text whose normalization can't be represented under the chosen form
@@ -1590,7 +1590,7 @@ public abstract class Rule
     /// <remarks>
     /// Default no-op: a rule with no fixed text of its own has nothing to
     /// validate.
-    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Compile</see>'s static walker (below) calls this on every reachable rule
+    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>'s static walker (below) calls this on every reachable rule
     /// and recurses into Children. 
     /// </remarks>
     protected virtual void ValidateNormalization(
@@ -1665,7 +1665,7 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Counterpart to <see cref="InductorParser.Rule.SetLeafRuneId(System.Int32)">SetLeafRuneId</see> for a single-rune leaf rule whose stored
+    /// Counterpart to <see cref="InductorParser.Rule.SetLeafRuneId(System.Int32)">Rule.SetLeafRuneId</see> for a single-rune leaf rule whose stored
     /// text turned multi-rune during the normalization pass (Token('é'),
     /// U+00E9, decomposing to "e + U+0301" under FormD).
     /// </summary>

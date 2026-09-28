@@ -35,14 +35,14 @@ namespace InductorParser.Lexing;
 /// One chunk of input the lexer just consumed, or the EOF token at the end
 /// of the input. In the default grapheme mode a token is one Unicode
 /// grapheme (i.e. one <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> grapheme cluster, possibly several runes
-/// wide). In the one-rune-per-token sub-lexer mode (<see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">WithinToken</see>) it's one
+/// wide). In the one-rune-per-token sub-lexer mode (<see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see>) it's one
 /// rune, which can be a fragment of a cluster, and under Compile(null) it
 /// can be a lone surrogate. Rather than copying the matched text into a new
 /// string, a Token keeps a reference to the original input plus an offset and
 /// a length.
 /// </summary>
 /// <remarks>
-/// Not to be confused with the <see cref="InductorParser.Rules.Token(char)">Token</see> factory in
+/// Not to be confused with the <see cref="InductorParser.Rules.Token(char)">Rules.Token</see> factory in
 /// <see cref="InductorParser.Rules"/>, which constructs a rule that matches
 /// one Token from the input. 
 /// </remarks>
@@ -52,7 +52,7 @@ public readonly ref struct Token
     /// other token from the same parse.</summary>
     public string Source { get; }
 
-    /// <summary>Index into <see cref="Source"/> where this token's text
+    /// <summary>Index into <see cref="Source">Token.Source</see> where this token's text
     /// begins.</summary>
     public int Offset { get; }
 
@@ -61,12 +61,12 @@ public readonly ref struct Token
     public int Length { get; }
 
     /// <summary>True for the token the lexer returns at
-    /// end-of-input. That token has an empty <see cref="Chars"/> and a
-    /// <see cref="RuneValue"/> of -1.</summary>
+    /// end-of-input. That token has an empty <see cref="Chars">Token.Chars</see> and a
+    /// <see cref="RuneValue">Token.RuneValue</see> of -1.</summary>
     public bool IsEof { get; }
 
     /// <summary>
-    /// A span over <see cref="Source"/> covering this token's text, without
+    /// A span over <see cref="Source">Token.Source</see> covering this token's text, without
     /// allocating. Empty for the end-of-input token.
     /// </summary>
     /// <remarks>
@@ -78,7 +78,7 @@ public readonly ref struct Token
 
     /// <summary>
     /// A <see cref="ReadOnlyMemory{T}"/> over this token's text. Unlike
-    /// <see cref="Chars"/>, Memory is heap-safe: it can be stored on a class,
+    /// <see cref="Chars">Token.Chars</see>, Memory is heap-safe: it can be stored on a class,
     /// in a dictionary, or across an await, where a span can't go. Empty for
     /// the end-of-input token.
     /// </summary>

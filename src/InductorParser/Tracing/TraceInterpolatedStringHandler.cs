@@ -82,7 +82,7 @@ public ref struct TraceInterpolatedStringHandler
     /// Constructor the compiler resolves for the short-form
     /// <see cref="InductorParser.Rule.TraceSuccess(InductorParser.Lexing.Lexer,InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceSuccess</see> / <see cref="InductorParser.Rule.TraceFailure(InductorParser.Lexing.Lexer, InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceFailure</see> helpers, whose handler attribute
     /// only adds the lexer argument. Defaults the level to
-    /// <see cref="TraceLevel.Diagnostic"/>.
+    /// <see cref="TraceLevel.Diagnostic">TraceLevel.Diagnostic</see>.
     /// </summary>
     public TraceInterpolatedStringHandler(
         int literalLength,

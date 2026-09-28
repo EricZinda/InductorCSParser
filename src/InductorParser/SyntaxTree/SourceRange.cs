@@ -4,12 +4,12 @@ namespace InductorParser.SyntaxTree;
 
 /// <summary>
 /// A start/end pair of <see cref="SourcePosition"/>s describing a span of source characters.
-/// <see cref="End"/> is one past the last character matched, so <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">End.CharIndex</see> - <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">Start.CharIndex</see>
+/// <see cref="End">SourceRange.End</see> is one past the last character matched, so <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">End.CharIndex</see> - <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">Start.CharIndex</see>
 /// equals the matched length in chars.
 /// </summary>
 /// <remarks>
-/// Both endpoints keep the source string they point into (via <see cref="SourcePosition.Input"/>),
-/// so <see cref="SubstringOfInput"/> can produce the matched text without the consumer having to know
+/// Both endpoints keep the source string they point into (via <see cref="SourcePosition.Input">SourcePosition.Input</see>),
+/// so <see cref="SubstringOfInput">SourceRange.SubstringOfInput()</see> can produce the matched text without the consumer having to know
 /// which input the range came from.
 /// </remarks>
 public readonly struct SourceRange
@@ -26,10 +26,10 @@ public readonly struct SourceRange
     /// covers everything from the start of the left child to the end of the right one.
     /// </summary>
     /// <remarks>
-    /// Both endpoints must point into the same input text, because <see cref="SubstringOfInput"/>
+    /// Both endpoints must point into the same input text, because <see cref="SubstringOfInput">SourceRange.SubstringOfInput()</see>
     /// indexes <see cref="InductorParser.SyntaxTree.SourcePosition.Input">Start.Input</see> with <see cref="InductorParser.SyntaxTree.SourcePosition.CharIndex">End.CharIndex</see>. Positions from the same parse always
     /// do. Two separate string instances with equal content count as the same input too, so
-    /// positions built by <see cref="SourcePosition.From"/> over two copies of the same text
+    /// positions built by <see cref="SourcePosition.From">SourcePosition.From(string, int)</see> over two copies of the same text
     /// also work.
     /// </remarks>
     /// <exception cref="ArgumentException">
@@ -53,24 +53,24 @@ public readonly struct SourceRange
     }
 
     /// <summary>
-    /// The substring of <see cref="SourcePosition.Input"/> covered by this range.
+    /// The substring of <see cref="SourcePosition.Input">SourcePosition.Input</see> covered by this range.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c><see cref="string.Substring(int, int)">Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex)</see></c>, but lets
+    /// Equivalent to <c><see cref="string.Substring(int, int)">string.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex)</see></c>, but lets
     /// the caller skip remembering which string the range came from.
     /// </remarks>
     public string SubstringOfInput() =>
         Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex);
 
     /// <summary>
-    /// The full text of the line <see cref="Start"/> falls on, terminator excluded.
+    /// The full text of the line <see cref="Start">SourceRange.Start</see> falls on, terminator excluded.
     /// </summary>
     /// <remarks>
     /// Shorthand for <see cref="InductorParser.SyntaxTree.SourcePosition.SourceLine">Start.SourceLine()</see>. Use it with
-    /// <see cref="SourcePosition.CharColumn"/> to draw a compiler-style caret under
+    /// <see cref="SourcePosition.CharColumn">SourcePosition.CharColumn</see> to draw a compiler-style caret under
     /// this span: the line for context, the column to indent the caret. On a
     /// range that spans more than one line this returns the first line, the one
-    /// <see cref="Start"/> is on. See <see cref="SourcePosition.SourceLine"/> for
+    /// <see cref="Start">SourceRange.Start</see> is on. See <see cref="SourcePosition.SourceLine">SourcePosition.SourceLine()</see> for
     /// how the line boundaries are found.
     /// </remarks>
     public string SourceLine() => Start.SourceLine();
