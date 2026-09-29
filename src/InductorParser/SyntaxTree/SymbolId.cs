@@ -12,7 +12,7 @@ namespace InductorParser.SyntaxTree;
 /// <remarks>
 /// Most code never touches a SymbolId directly. <see cref="Symbol.Is(Rule)">Symbol.Is(Rule)</see>,
 /// <see cref="Symbol.Find(Rule)">Symbol.Find(Rule)</see>, and <see cref="ParseResult.Find(Rule)">ParseResult.Find(Rule)</see>
-/// take the Rule and compare ids for you. You'll meet it when a tree walker dispatches on
+/// take the Rule and compare ids for you. You'll need it when a tree walker dispatches on
 /// <see cref="Symbol.Id">Symbol.Id</see>, when a rule needs a stable numeric id for serialization via
 /// <see cref="Rule.As(SymbolId)">Rule.As(SymbolId)</see>, or when writing your own Rule subclass.
 /// <para>

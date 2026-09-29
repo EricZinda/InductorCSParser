@@ -7,7 +7,7 @@ namespace InductorParser;
 /// hands to each rule's
 /// <see cref="Rule.ValidateNormalization(System.Text.NormalizationForm, INormalizationReporter)">Rule.ValidateNormalization</see>
 /// so the rule can report text it stores that can't be matched under the grammar's normalization
-/// form. Only rule writers meet it: a grammar built from the built-in rules never sees it, and the
+/// form. Only rule writers use it: a grammar built from the built-in rules never sees it, and the
 /// library implements it. A rule reports rather than throwing because Compile gathers every report
 /// across the whole grammar and throws one InvalidOperationException at the end that lists them
 /// all.
