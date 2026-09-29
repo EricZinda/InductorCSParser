@@ -45,6 +45,20 @@ public sealed partial class Lexer
     /// <see cref="Dispose">Lexer.Transaction.Dispose()</see> the lexer position rolls back to where the
     /// transaction opened unless <see cref="Commit">Lexer.Transaction.Commit()</see> was called first.
     /// </summary>
+    /// <remarks>
+    /// Transactions nest, one per rule invocation, and always as a <c>using</c> block so an inner
+    /// one closes before the outer one that contains it. An inner Commit is local: it keeps the
+    /// inner rule's reads only until an enclosing transaction decides. If an outer rule then
+    /// fails, its rollback undoes everything inside it, committed or not. Only the outermost
+    /// successful match is final. Failures recorded inside a transaction survive its rollback,
+    /// because a rejected branch is still evidence about where the input went wrong. To discard
+    /// them too, use a <see cref="Probe"/>.
+    /// <para>
+    /// A rule writer rarely opens one by hand: Rule.TryParse wraps every
+    /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>
+    /// call in one, so a rule opens its own only for a scope inside its own match.
+    /// </para>
+    /// </remarks>
     public struct Transaction : IDisposable
     {
         private readonly Lexer _lexer;

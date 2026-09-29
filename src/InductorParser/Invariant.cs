@@ -5,40 +5,39 @@ using System.Text;
 
 namespace InductorParser;
 
-// Internal invariant check. Use for "this can't happen, but if it does,
-// stop predictably right here" conditions: postconditions of a helper
-// the caller can't see inside, loop bounds that depend on a property
-// of an upstream computation, agreements between two internal
-// collaborators about what each end is allowed to hand the other.
-// Fires in Release as well as Debug. The cost
-// of a never-taken branch on the parse hot path is less than the cost
-// of silently producing wrong output when the invariant ever does
-// break.
-//
-// Not for user-API errors. ".As(...) called twice" or "rule was never
-// bound" are bugs in the user's grammar, and keep their own
-// InvalidOperationException with a helpful message pointing at the fix.
-// Invariant.That is for the other direction: a condition that should
-// never happen no matter how the API is used, i.e. a bug in the code
-// that declared the invariant. The exception type
-// (InductorParserBugException) is what tells the difference. This is
-// public so a user-defined Rule can assert its own internal invariants
-// the same way the built-in rules do.
-//
-// The message parameter is an [InterpolatedStringHandler], the same
-// pattern Lexer.Trace uses. When the condition holds, the compiler
-// skips every AppendLiteral / AppendFormatted call inside the
-// $"..." expression, so a call like:
-//
-//     Invariant.That(len > 0, $"NextTokenLength {len} at {_position}")
-//
-// pays zero formatting cost on the success path: no boxing of len, no
-// ToString on _position, no StringBuilder allocation. The check
-// collapses to a branch on `condition` and a ref-struct construction
-// that the JIT folds into the caller. See InvariantInterpolatedStringHandler
-// below for the rewrite mechanics.
+/// <summary>
+/// Internal invariant checks for rule writers: "this can't happen, but if it does, stop right
+/// here" conditions such as a helper's postcondition, a loop bound that depends on an earlier
+/// computation, or an agreement between two pieces of code about what each may hand the other.
+/// A failed check throws <see cref="InductorParserBugException"/>. The checks run in Release as
+/// well as Debug, because a never-taken branch costs less than silently producing a wrong parse
+/// when an invariant does break. The built-in rules use this, and a user-defined
+/// <see cref="Rule"/> can assert its own invariants the same way.
+/// </summary>
+/// <remarks>
+/// This isn't for errors a grammar author can cause by using the API wrong. Calling
+/// <see cref="Rule.As(string)">Rule.As</see> twice or parsing with an unbound
+/// <see cref="LateBoundRule"/> are bugs in the grammar, and they throw
+/// InvalidOperationException with a message that points at the fix. Invariant is for the other
+/// direction: a condition that should never fail no matter how the API is used, meaning a bug in
+/// the code that declared the invariant. The two exception types are how you tell the cases
+/// apart.
+/// <para>
+/// The message is an interpolated string that costs nothing when the condition holds. Write
+/// <c>Invariant.That(length &gt; 0, $"NextTokenLength {length} at {position}")</c> and the
+/// formatting, boxing, and string building only happen on the failure path. See
+/// <see cref="InvariantInterpolatedStringHandler"/> for how.
+/// </para>
+/// </remarks>
 public static class Invariant
 {
+    /// <summary>
+    /// Throws <see cref="InductorParserBugException"/> with <paramref name="message"/> when
+    /// <paramref name="condition"/> is false. The message is built only on that path, so put
+    /// whatever state would help debug the failure into the interpolation holes freely.
+    /// </summary>
+    /// <param name="condition">The invariant. True means everything is fine.</param>
+    /// <param name="message">An interpolated string describing what broke, formatted only if the check fails.</param>
     // AggressiveInlining on the check, NoInlining on the throw. Same
     // pattern as ParseBudget.ThrowBudgetExceeded: a method that throws is
     // poison to the JIT's inliner, and pulling the throw into its own
@@ -56,13 +55,19 @@ public static class Invariant
             Throw(message.GetFormattedOrEmpty());
     }
 
-    // Overload for callers whose message is a plain string literal or
-    // a compile-time-folded constant like "a " + "b " + "c". Those
-    // aren't $"..." interpolated string expressions, so the C# spec
-    // won't route them through the handler. The constant is already a
-    // single string object the runtime hands us by reference, so there
-    // is nothing to defer. Resolution picks the handler overload for
-    // any $"..." expression and this overload for everything else.
+    /// <summary>
+    /// Throws <see cref="InductorParserBugException"/> with <paramref name="message"/> when
+    /// <paramref name="condition"/> is false. This overload takes a plain string, for a message
+    /// with nothing to format. Overload resolution picks it for any argument that isn't an
+    /// interpolated string.
+    /// </summary>
+    /// <param name="condition">The invariant. True means everything is fine.</param>
+    /// <param name="message">What broke.</param>
+    // A plain string literal or a compile-time-folded constant like
+    // "a " + "b " + "c" isn't a $"..." expression, so the C# spec won't
+    // route it through the handler. The constant is already a single
+    // string object the runtime hands us by reference, so there is
+    // nothing to defer.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void That(bool condition, string message)
     {
@@ -70,15 +75,18 @@ public static class Invariant
             Throw(message);
     }
 
-    // Build (don't throw) the bug exception for a branch that should be
-    // unreachable: a switch default that can't be hit, an exhaustive if/else,
-    // a case the type system can't rule out but the logic can. The caller
-    // writes `throw Invariant.Fail(...)`. Returning the exception and throwing
-    // at the call keeps the compiler's control-flow analysis happy, so a switch
-    // default or exhaustive else needs no dummy return after it. (A plain
-    // [DoesNotReturn] void call wouldn't: C# only uses [DoesNotReturn] for
-    // nullable flow, not for definite-return, so the method would still demand
-    // a return.) Plain string, not the deferred handler That uses, since an
+    /// <summary>
+    /// Builds, without throwing, the <see cref="InductorParserBugException"/> for a branch that
+    /// should be unreachable: a switch default that can't be hit, an exhaustive if/else, a case
+    /// the type system can't rule out but the logic can. Write <c>throw Invariant.Fail("...")</c>
+    /// so the compiler's flow analysis sees the throw and doesn't demand a return after it.
+    /// </summary>
+    /// <param name="message">What would have to be true for this branch to run.</param>
+    // Returning the exception and throwing at the call is what keeps
+    // definite-return analysis happy. A [DoesNotReturn] void method
+    // wouldn't: C# only uses that attribute for nullable flow, not for
+    // definite return, so a switch default would still need a dummy
+    // return. Plain string, not the deferred handler That uses, since an
     // unreachable branch never runs and so never pays the formatting cost.
     public static Exception Fail(string message) =>
         new InductorParserBugException(message);
@@ -91,34 +99,35 @@ public static class Invariant
     }
 }
 
-// Interpolated-string handler for Invariant.That. The compiler sees
-// $"..." passed to a parameter typed as this handler and rewrites the
-// call to:
-//
-//     var handler = new InvariantInterpolatedStringHandler(literalLen, formattedCount, condition, out bool shouldAppend);
-//     if (shouldAppend)
-//     {
-//         handler.AppendLiteral("NextTokenLength ");
-//         handler.AppendFormatted(len);
-//         handler.AppendLiteral(" at ");
-//         handler.AppendFormatted(_position);
-//     }
-//     Invariant.That(condition, handler);
-//
-// The constructor sets shouldAppend=true only when condition is
-// false, i.e. when That is about to throw and needs the formatted
-// message. Every other call shouldAppend=false, so the compiler skips
-// every Append call: no boxing, no ToString, no StringBuilder. A
-// plain string literal "foo" passed in compiles to AppendLiteral("foo")
-// inside the same if-shouldAppend block and pays the same nothing.
-//
-// ref struct keeps the handler stack-only for the duration of the
-// call, so the struct construction itself is free.
+/// <summary>
+/// The interpolated-string handler behind <see cref="Invariant.That(bool, InvariantInterpolatedStringHandler)">Invariant.That</see>.
+/// You never use it directly: passing a <c>$"..."</c> string to That makes the compiler build one
+/// of these and route each literal and each hole through it. The handler formats nothing while the
+/// condition holds, which is what lets an invariant message include positions, lengths, and rule
+/// names at no cost on the success path.
+/// </summary>
+/// <remarks>
+/// The compiler rewrites <c>Invariant.That(condition, $"at {position}")</c> to construct the
+/// handler with the condition, check the <c>shouldAppend</c> flag it returns, and only then call
+/// <see cref="AppendLiteral">AppendLiteral</see> and <see cref="AppendFormatted{T}(T)">AppendFormatted</see>.
+/// The constructor sets that flag only when the condition is false, so on every passing check
+/// the appends are skipped entirely: no boxing, no ToString, no string builder. It's a ref struct
+/// so it lives on the stack for the duration of the call.
+/// </remarks>
 [InterpolatedStringHandler]
 public ref struct InvariantInterpolatedStringHandler
 {
     private StringBuilder? _builder;
 
+    /// <summary>
+    /// Called by the compiler, not by user code. Sets <paramref name="shouldAppend"/> to true only
+    /// when <paramref name="condition"/> is false, so the message is formatted only when the check
+    /// is about to fail.
+    /// </summary>
+    /// <param name="literalLength">The total length of the literal parts, supplied by the compiler.</param>
+    /// <param name="formattedCount">The number of interpolation holes, supplied by the compiler.</param>
+    /// <param name="condition">The invariant being checked.</param>
+    /// <param name="shouldAppend">Whether the compiler should run the append calls.</param>
     public InvariantInterpolatedStringHandler(
         int literalLength,
         int formattedCount,
@@ -139,12 +148,16 @@ public ref struct InvariantInterpolatedStringHandler
         }
     }
 
+    /// <summary>Called by the compiler for each literal piece of the message.</summary>
     public void AppendLiteral(string value) => _builder?.Append(value);
 
+    /// <summary>Called by the compiler for each interpolation hole of the message.</summary>
     public void AppendFormatted<T>(T value) => _builder?.Append(value?.ToString());
 
+    /// <summary>Called by the compiler for a string-typed interpolation hole.</summary>
     public void AppendFormatted(string? value) => _builder?.Append(value);
 
+    /// <summary>Called by the compiler for a span-typed interpolation hole.</summary>
     public void AppendFormatted(ReadOnlySpan<char> value) => _builder?.Append(value);
 
     internal string GetFormattedOrEmpty()
@@ -155,13 +168,18 @@ public ref struct InvariantInterpolatedStringHandler
     }
 }
 
-// Thrown when an Invariant.That condition fails. Derives from
-// Exception directly rather than from InvalidOperationException so a
-// stray `catch (InvalidOperationException)` somewhere up the stack
-// can't quietly swallow it. The user-API rejections (".As called
-// twice", etc.) are still InvalidOperationException. This one means an
-// invariant that should never fail did, whether it was declared by
-// InductorParser itself or by a user-defined rule.
+/// <summary>
+/// Thrown when an <see cref="Invariant.That(bool, string)">Invariant.That</see> check fails or
+/// <see cref="Invariant.Fail">Invariant.Fail</see> is thrown. It means an invariant that should never
+/// fail did, whether InductorParser itself or a user-defined rule declared it, so it's a bug in that
+/// code rather than in the grammar or the input. Its message starts with "Invariant violated:".
+/// </summary>
+/// <remarks>
+/// Derives from Exception directly rather than from InvalidOperationException, so a
+/// <c>catch (InvalidOperationException)</c> somewhere up the stack can't quietly swallow it. The
+/// errors a grammar author can cause, such as calling <see cref="Rule.As(string)">Rule.As</see>
+/// twice, stay InvalidOperationException. Catching this type is how a test tells the two apart.
+/// </remarks>
 public sealed class InductorParserBugException : Exception
 {
     internal InductorParserBugException(string message)

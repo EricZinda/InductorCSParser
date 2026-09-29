@@ -2,29 +2,43 @@ using System;
 
 namespace InductorParser;
 
-// Sink handed to Rule.ValidateNormalization during Compile so a rule can
-// report when the text the user typed can't be matched under the chosen
-// normalization form. A rule reports rather than throwing because Compile
-// gathers every report across the whole grammar and throws one combined
-// error at the end:
-//
-//   * ReportOffender: "this stored text can't be matched under `form`",
-//     with a suggested replacement for the Compile error message. Records
-//     the offender and returns. Compile collects every offender across the
-//     whole grammar and throws one InvalidOperationException at the end.
-//
-//   * ReportNormalizeFailure: converting the stored text to `form` failed
-//     because the text can't be normalized: an unpaired surrogate, or
-//     U+FFFE, the two things the rejection scan flags (string.Normalize
-//     itself throwing is only the backstop case). The reported exceptions
-//     are gathered into an AggregateException that becomes the thrown
-//     InvalidOperationException's InnerException, even when there's just
-//     one. The engine also records a matching offender so the
-//     rule still appears in the user-facing list. TryConvertToForm calls
-//     this for you, so most rules never call it directly.
+/// <summary>
+/// The sink <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>
+/// hands to each rule's
+/// <see cref="Rule.ValidateNormalization(System.Text.NormalizationForm, INormalizationReporter)">Rule.ValidateNormalization</see>
+/// so the rule can report text it stores that can't be matched under the grammar's normalization
+/// form. Only rule writers meet it: a grammar built from the built-in rules never sees it, and the
+/// library implements it. A rule reports rather than throwing because Compile gathers every report
+/// across the whole grammar and throws one InvalidOperationException at the end that lists them
+/// all.
+/// </summary>
+/// <remarks>
+/// Most user-defined rules never call either method directly. A rule with one fixed expected
+/// string calls
+/// <see cref="Rule.TryConvertToForm(Rule, string, System.Text.NormalizationForm, INormalizationReporter)">Rule.TryConvertToForm</see>,
+/// which reports for it.
+/// </remarks>
 public interface INormalizationReporter
 {
+    /// <summary>
+    /// Reports that <paramref name="original"/>, text stored on <paramref name="rule"/>, can't be
+    /// matched under the grammar's normalization form. Compile lists every offender in the
+    /// exception it throws, each with its suggested replacement, so the grammar author can see
+    /// what to change.
+    /// </summary>
+    /// <param name="rule">The rule holding the text.</param>
+    /// <param name="original">The stored text as the grammar author wrote it.</param>
+    /// <param name="suggestedReplacement">What to write instead, for the error message.</param>
     void ReportOffender(Rule rule, string original, string suggestedReplacement);
 
+    /// <summary>
+    /// Reports that converting <paramref name="original"/>, text stored on <paramref name="rule"/>,
+    /// to the grammar's normalization form failed because the text isn't well-formed: it contains
+    /// an unpaired surrogate or U+FFFE. Compile lists the rule as an offender and attaches the
+    /// failures to the exception it throws as its InnerException.
+    /// </summary>
+    /// <param name="rule">The rule holding the text.</param>
+    /// <param name="original">The stored text that couldn't be normalized.</param>
+    /// <param name="failure">The exception describing what's wrong with the text.</param>
     void ReportNormalizeFailure(Rule rule, string original, ArgumentException failure);
 }

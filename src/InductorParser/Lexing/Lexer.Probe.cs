@@ -15,6 +15,14 @@ public sealed partial class Lexer
     /// the failures and subtree extent the probe recorded, so a failed
     /// lookahead leaves no trace in the parse.
     /// </summary>
+    /// <remarks>
+    /// Probes nest the same way transactions do, as <c>using</c> blocks, and the two mix freely.
+    /// A probe inside a transaction rolls back its own reads and failures without touching the
+    /// transaction. A transaction inside a probe is undone by the probe's rollback even if it
+    /// committed, and any failures it recorded go with it. That's what makes a probe safe for
+    /// lookahead: when it rolls back, the parse looks exactly as it did before the probe opened.
+    /// Open one with <see cref="InductorParser.Lexing.Lexer.BeginProbe">Lexer.BeginProbe()</see>.
+    /// </remarks>
     public struct Probe : IDisposable
     {
         private readonly Lexer _lexer;
