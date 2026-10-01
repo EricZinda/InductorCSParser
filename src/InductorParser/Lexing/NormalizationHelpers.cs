@@ -5,8 +5,8 @@ using InductorParser.Lexing.Unicode;
 namespace InductorParser.Lexing;
 
 /// <summary>
-/// Shared normalization helpers built on <c>UnicodeNormalization</c>,
-/// so callers get the same answers the parser does. This is the
+/// Shared normalization helpers built on the same normalizer the parser uses,
+/// so callers see the same normalized text the parser does. This is the
 /// normalization layer. Its segmentation counterpart is
 /// <see cref="GraphemeHelpers"/>. Public so user-defined rules and
 /// test oracles can normalize text exactly the way <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> and Parse

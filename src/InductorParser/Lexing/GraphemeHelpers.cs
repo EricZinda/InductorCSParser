@@ -4,12 +4,12 @@ using InductorParser.Lexing.Unicode;
 namespace InductorParser.Lexing;
 
 /// <summary>
-/// Shared grapheme-cluster helpers built on <c>GraphemeSegmentation</c>,
-/// so callers get the same answers the lexer does.
+/// Shared grapheme-cluster helpers built on the same segmenter the lexer uses,
+/// so callers see the same cluster boundaries the lexer does.
 /// This is the grapheme-cluster layer. Its rune-layer counterpart is
 /// <see cref="RuneHelpers"/>, kept separate because runes and <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
-/// clusters are different units. Public so user-defined rules can ask
-/// the same segmentation questions the built-in rules do. Which
+/// clusters are different units. Public so user-defined rules can use
+/// the same segmentation calls the built-in rules do. Which
 /// segmenter is used is the process-wide
 /// <see cref="UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see> setting, which
 /// governs segmentation and normalization together.
@@ -44,11 +44,10 @@ public static class GraphemeHelpers
         GraphemeSegmentation.GetLengthOfFirstExtendedGraphemeCluster(text);
 
     /// <summary>
-    /// The largest grapheme cluster boundary of <paramref name="text"/>
-    /// at or below <paramref name="position"/>. A position that lands
-    /// mid-cluster is pulled back to the start of that cluster, and a
-    /// position already on a boundary comes back unchanged. Positions
-    /// past the end of the string are treated as <c><see cref="string.Length">text.Length</see></c>.
+    /// If <paramref name="position"/> is inside a grapheme cluster, returns the index where that
+    /// cluster starts. Otherwise, returns the position unchanged. Indices count UTF-16 code units
+    /// (C# <c>char</c> values). Positions below zero return zero. Positions beyond the end return
+    /// <c><see cref="string.Length">text.Length</see></c>.
     /// </summary>
     /// <remarks>
     /// Cluster boundaries come from the per-string boundary cache, so
@@ -56,6 +55,11 @@ public static class GraphemeHelpers
     /// failure offsets into its expected text, for example) allocate
     /// nothing after the first call.
     /// </remarks>
+    /// <example>
+    /// In <c>"e\u0301x"</c>, the letter <c>e</c> at index 0 and the combining accent at index 1
+    /// form one grapheme cluster. Position 1 therefore returns 0. Position 2 returns 2 because
+    /// it's already at the start of the next cluster, <c>x</c>.
+    /// </example>
     public static int FloorToClusterStart(string text, int position)
     {
         if (text == null) throw new ArgumentNullException(nameof(text));

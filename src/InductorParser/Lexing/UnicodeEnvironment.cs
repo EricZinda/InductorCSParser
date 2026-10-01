@@ -154,25 +154,54 @@ public static class UnicodeEnvironment
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This safeguard applies when <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>
-    /// is active because that implementation delegates normalization to .NET's
-    /// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>.
-    /// Its behavior depends on the .NET runtime's globalization settings and the operating system's Unicode support.
+    /// When using <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>, the parser relies on
+    /// .NET to normalize text. Some .NET settings disable normalization or change its results.
+    /// The parser checks for those settings to prevent unexpected parsing behavior.
     /// </para>
     /// <para>
-    /// <b>Invariant globalization:</b> <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
+    /// <b>Invariant globalization:</b> a .NET mode that runs without culture-specific data and behavior.
+    /// It allows applications to run without the usual globalization libraries, but also disables Unicode normalization.
+    /// This is an application-wide setting, not a grammar option or the same thing as selecting
+    /// <see cref="System.Globalization.CultureInfo.InvariantCulture">CultureInfo.InvariantCulture</see> for an operation.
+    /// </para>
+    /// <para>
+    /// The application or its deployment enables this mode with <c>&lt;InvariantGlobalization&gt;true&lt;/InvariantGlobalization&gt;</c>
+    /// in the project file, <c>System.Globalization.Invariant</c> set to <c>true</c> under
+    /// <c>runtimeOptions.configProperties</c> in <c>runtimeconfig.json</c>, or the environment variable
+    /// <c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1</c>. See
+    /// <a href="https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-environment-variables#set-invariant-mode">.NET invariant-mode configuration</a>.
+    /// </para>
+    /// <para>
+    /// In this mode, <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
     /// returns the input unchanged instead of normalizing it. A grammar requesting normalization would
     /// therefore run without it. For example, a precomposed accented letter and the same letter followed
     /// by a combining accent could fail to match each other even though normalization should make them equivalent.
     /// </para>
     /// <para>
-    /// <b>Windows NLS:</b> normalization uses the Unicode data supplied by Windows instead of the ICU
-    /// library. Normalization still takes place, but differences in the Unicode data and implementation
+    /// The parser checks that normalization actually works by having .NET normalize <c>e</c> followed
+    /// by a combining acute accent to Form C and checking that the result is the single precomposed letter <c>é</c>.
+    /// If that check fails, the parser rejects runtime normalization by default. It also checks .NET's internal
+    /// mode flag when available so the error can identify invariant globalization specifically.
+    /// The normalization check still protects against skipped normalization when that flag can't be read.
+    /// </para>
+    /// <para>
+    /// <b>Windows NLS:</b> National Language Support is Windows' built-in globalization service.
+    /// .NET normally uses ICU (International Components for Unicode) on supported modern Windows systems,
+    /// but can fall back to NLS when the system ICU library is unavailable or can't be loaded.
+    /// An application can also explicitly select NLS by setting <c>System.Globalization.UseNls</c> to
+    /// <c>true</c> under <c>runtimeOptions.configProperties</c> in <c>runtimeconfig.json</c>, or by setting
+    /// the environment variable <c>DOTNET_SYSTEM_GLOBALIZATION_USENLS=1</c> before startup.
+    /// These options apply to Windows. See
+    /// <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/globalization-icu#icu-on-windows">.NET's ICU and NLS selection</a>.
+    /// </para>
+    /// <para>
+    /// With NLS, normalization uses Windows' Unicode data instead of ICU's.
+    /// Normalization still takes place, but differences in the Unicode data and implementation
     /// can produce different results from a .NET configuration using ICU. A grammar tested with ICU
     /// could therefore match different input when run with Windows NLS.
     /// </para>
     /// <para>
-    /// Under either setting, the first
+    /// When .NET is running in invariant globalization mode or using Windows NLS, the first
     /// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(NormalizationForm?)</see> or
     /// <see cref="Rule.Parse(string)">Rule.Parse(string)</see> that requires normalization throws
     /// <see cref="InvalidOperationException"/> unless this property is <c>true</c>.

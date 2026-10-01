@@ -6,7 +6,7 @@ namespace InductorParser.SyntaxTree;
 /// <summary>
 /// Identifies which rule produced a <see cref="Symbol"/> in a parse tree. Every Symbol stores one
 /// as <see cref="Symbol.Id">Symbol.Id</see>, and every rule gets one when the grammar is compiled,
-/// so a tree walker can ask "did this node come from that rule?" with an integer compare instead
+/// so a tree walker can check whether a node came from a given rule with an integer compare instead
 /// of holding on to Rule references.
 /// </summary>
 /// <remarks>

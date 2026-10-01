@@ -37,7 +37,7 @@ public sealed partial class Lexer
     /// Use this when behavior should change because someone is watching the
     /// parse (turning off an optimization that would create gaps in the trace,
     /// for example), as opposed to <see cref="IsTracing(TraceLevel)">Lexer.IsTracing(TraceLevel)</see>, which
-    /// asks whether to emit a line at a specific verbosity.
+    /// reports whether a line at a specific verbosity would be emitted.
     /// </remarks>
     public bool IsTracing() => _traceSink != null;
 
