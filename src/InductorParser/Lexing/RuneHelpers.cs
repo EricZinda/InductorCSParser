@@ -12,9 +12,7 @@ namespace InductorParser.Lexing;
 /// </summary>
 /// <remarks>
 /// This is the rune layer. Its grapheme-cluster counterpart is
-/// <see cref="GraphemeHelpers"/>. The two stay separate because runes and <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
-/// clusters are different units, and the lexer's rune-mode / grapheme-mode
-/// split rests on keeping them apart.
+/// <see cref="GraphemeHelpers"/>.
 /// </remarks>
 public static class RuneHelpers
 {

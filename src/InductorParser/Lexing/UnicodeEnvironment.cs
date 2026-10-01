@@ -4,10 +4,17 @@ namespace InductorParser.Lexing;
 
 /// <summary>
 /// Chooses the Unicode implementation used throughout the process for both segmentation and normalization.
+/// <list type="bullet">
+/// <item><description>
 /// The segmenter divides input into grapheme clusters: the units the parser normally reads as tokens,
 /// such as a letter with its combining marks or an emoji sequence.
-/// The normalizer converts text to the grammar's chosen Unicode normalization form,
-/// so equivalent spellings can match a single rule, such as a precomposed accented letter and a letter followed by a combining accent.
+/// </description></item>
+/// <item><description>
+/// The normalizer converts text to the grammar's chosen Unicode normalization form, so equivalent
+/// spellings can match a single rule, such as a precomposed accented letter and a letter followed by
+/// a combining accent.
+/// </description></item>
+/// </list>
 /// One setting selects either the built-in implementations or .NET's implementations for both operations.
 /// The two choices can parse some input differently, so the remarks below say how to pick.
 /// </summary>
@@ -17,8 +24,8 @@ namespace InductorParser.Lexing;
 /// The built-in pair (<see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>)
 /// implements one Unicode version, 16.0, for both operations and reads nothing but its own tables, so
 /// a grammar parses identically on every machine and every runtime. The runtime pair
-/// (<see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>) follows .NET:
-/// segmentation runs at the Unicode version compiled into the .NET runtime, and normalization runs at
+/// (<see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>) uses .NET, whose
+/// segmentation has the Unicode version compiled into the .NET runtime, and normalization uses
 /// whatever version the host's ICU library supplies. Those two versions can differ from each other and
 /// from machine to machine. The gap only shows up for characters added or recategorized between the
 /// versions involved, so most grammars parse the same either way, but when it does show up nothing
