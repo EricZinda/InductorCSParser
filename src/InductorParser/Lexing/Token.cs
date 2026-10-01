@@ -32,6 +32,7 @@ namespace InductorParser.Lexing;
 //     on every Chars access.
 
 /// <summary>
+/// Tokens are created by the <see cref="Lexer"/>. Grammar authors never need to construct them.
 /// One chunk of input the lexer just consumed, or the EOF token at the end
 /// of the input. In the default grapheme mode a token is one Unicode
 /// grapheme (i.e. one <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> grapheme cluster, possibly several runes
@@ -120,6 +121,8 @@ public readonly ref struct Token
     }
 
     /// <summary>
+    /// Grammar authors never need to call this constructor. Tokens come from
+    /// <see cref="Lexer.Read">Lexer.Read()</see>.
     /// Creates a token spanning <paramref name="length"/> chars of
     /// <paramref name="source"/> starting at <paramref name="offset"/>. When
     /// <paramref name="isEof"/> is true the token is the flag-only
