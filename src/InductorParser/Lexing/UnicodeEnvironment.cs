@@ -3,11 +3,12 @@ using System;
 namespace InductorParser.Lexing;
 
 /// <summary>
-/// The process-wide choice of Unicode implementation, shared by the
-/// segmenter (<c>GraphemeSegmentation</c>) and the normalizer
-/// (<c>UnicodeNormalization</c>). One setting governs both so
-/// segmentation and normalization can never answer from different
-/// Unicode data.
+/// Chooses the Unicode implementation used throughout the process for both segmentation and normalization.
+/// The segmenter divides input into grapheme clusters: the units the parser normally reads as tokens,
+/// such as a letter with its combining marks or an emoji sequence.
+/// The normalizer converts text to the grammar's chosen Unicode normalization form,
+/// so equivalent spellings can match a single rule, such as a precomposed accented letter and a letter followed by a combining accent.
+/// One setting controls both operations so they use the same source of Unicode data.
 /// </summary>
 public static class UnicodeEnvironment
 {
@@ -127,24 +128,33 @@ public static class UnicodeEnvironment
     }
 
     /// <summary>
-    /// Opt-in acceptance of the host's globalization configuration when
-    /// the <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see> implementation is active. Defaults to false: when
-    /// the parser is normalizing with the runtime's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
-    /// and the process is running under invariant globalization (which
-    /// makes <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> return its input unchanged) or Windows
-    /// NLS (which normalizes from Windows' own data instead of ICU),
-    /// the first normalizing <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> or Parse throws
-    /// <see cref="InvalidOperationException"/>, because a normalizing
-    /// grammar would silently produce different parses than on a
-    /// normally configured host. Set this to true at startup, before
-    /// building grammars or parsing, to say the host's globalization is
-    /// understood and the runtime implementations are wanted anyway.
-    /// Same freeze rule as <see cref="Implementation">UnicodeEnvironment.Implementation</see>: the first
-    /// segmentation or normalization query freezes it, and setting it
-    /// after that throws. It has no effect when the built-in
-    /// implementations are active, since they never touch host
-    /// globalization.
+    /// The host's globalization settings can change how text is normalized, causing the same grammar
+    /// and input to produce different parse results on different machines. By default, the parser rejects
+    /// runtime normalization under settings known to cause these differences. Set this property to
+    /// <c>true</c> to allow it anyway. The default is <c>false</c>.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This safeguard applies when <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>
+    /// is active. Invariant globalization makes <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
+    /// return the input unchanged. Windows NLS uses Windows' Unicode data instead of ICU's, which can
+    /// produce different normalization results. Under either setting, the first
+    /// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(NormalizationForm?)</see> or
+    /// <see cref="Rule.Parse(string)">Rule.Parse(string)</see> that requires normalization throws
+    /// <see cref="InvalidOperationException"/> unless this property is <c>true</c>.
+    /// </para>
+    /// <para>
+    /// Set this to <c>true</c> only if you want the host's normalization behavior and accept that parse
+    /// results may differ between hosts. Set it at startup, before building grammars or parsing.
+    /// Like <see cref="Implementation">UnicodeEnvironment.Implementation</see>, this setting becomes fixed
+    /// after the first segmentation or normalization query. Assigning it after that throws
+    /// <see cref="InvalidOperationException"/>.
+    /// </para>
+    /// <para>
+    /// This setting has no effect when <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>
+    /// is active, because the built-in implementations use their own Unicode data instead of the host's.
+    /// </para>
+    /// </remarks>
     public static bool AcceptHostGlobalization
     {
         get => _acceptHostGlobalization;

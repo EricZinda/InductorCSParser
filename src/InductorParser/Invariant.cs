@@ -7,11 +7,11 @@ namespace InductorParser;
 
 /// <summary>
 /// Internal invariant checks for rule writers: "this can't happen, but if it does, stop right
-/// here" conditions such as a helper's postcondition, a loop bound that depends on an earlier
+/// here" conditions such as an assumed result from a helper function, a loop bound that depends on an earlier
 /// computation, or an agreement between two pieces of code about what each may hand the other.
 /// A failed check throws <see cref="InductorParserBugException"/>. The checks run in Release as
-/// well as Debug, because a never-taken branch costs less than silently producing a wrong parse
-/// when an invariant does break. The built-in rules use this, and a user-defined
+/// well as Debug, because Invariant is asserting things that must be true for the code to be correct.
+/// The built-in rules use this, and a user-defined
 /// <see cref="Rule"/> can assert its own invariants the same way.
 /// </summary>
 /// <remarks>
@@ -26,7 +26,7 @@ namespace InductorParser;
 /// The message is an interpolated string that costs nothing when the condition holds. Write
 /// <c>Invariant.That(length &gt; 0, $"NextTokenLength {length} at {position}")</c> and the
 /// formatting, boxing, and string building only happen on the failure path. See
-/// <see cref="InvariantInterpolatedStringHandler"/> for how.
+/// <see cref="InvariantInterpolatedStringHandler"/> for how this mechanism works if you are curious.
 /// </para>
 /// </remarks>
 public static class Invariant
