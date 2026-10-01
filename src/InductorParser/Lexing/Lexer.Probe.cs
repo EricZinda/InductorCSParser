@@ -18,11 +18,11 @@ public sealed partial class Lexer
     /// <remarks>
     /// <para><b>How nesting works</b></para>
     /// <para>
-    /// Transactions and probes can contain either kind of scope. Open them in nested <c>using</c>
+    /// Transactions and probes can contain each other in any combination. Open them in nested <c>using</c>
     /// blocks so each inner scope closes before its enclosing scope. Each scope saves the lexer
     /// position when it opens. Rolling back restores that position, including undoing reads made
     /// by any nested scopes. Committing an inner scope only prevents its own rollback. An enclosing
-    /// scope can still roll back past it. This rule applies to every combination of transactions and probes.
+    /// scope can still roll back past it.
     /// </para>
     /// <para><b>What each scope restores</b></para>
     /// <para>

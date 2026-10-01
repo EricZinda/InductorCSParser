@@ -50,11 +50,11 @@ public sealed partial class Lexer
     /// <remarks>
     /// <para><b>How nesting works</b></para>
     /// <para>
-    /// Transactions and probes can contain either kind of scope. Open them in nested <c>using</c>
+    /// Transactions and probes can contain each other in any combination. Open them in nested <c>using</c>
     /// blocks so each inner scope closes before its enclosing scope. Each scope saves the lexer
     /// position when it opens. Rolling back restores that position, including undoing reads made
     /// by any nested scopes. Committing an inner scope only prevents its own rollback. An enclosing
-    /// scope can still roll back past it. This rule applies to every combination of transactions and probes.
+    /// scope can still roll back past it.
     /// </para>
     /// <para><b>What each scope restores</b></para>
     /// <para>
@@ -107,8 +107,9 @@ public sealed partial class Lexer
         /// </summary>
         /// <remarks>
         /// <see cref="Commit">Lexer.Transaction.Commit</see> does nothing to the failure tracker. Failures survive both
-        /// commit and rollback. A rejected <see cref="Rules.Or">Rules.Or</see> branch or a count rule's stopped
-        /// iteration is real evidence about the input and is kept, ranked by
+        /// commit and rollback. A rejected <see cref="Rules.Or">Rules.Or</see> branch or a failed attempt to match
+        /// another repetition in <see cref="Rules.OneOrMore(Rule)">Rules.OneOrMore(Rule)</see>
+        /// is real evidence about the input and is kept, ranked by
         /// depth like any other failure. The one exception is lookahead, which
         /// is what <see cref="InductorParser.Lexing.Lexer.BeginProbe">Lexer.BeginProbe()</see> is for: a <see cref="Probe">Lexer.Probe</see> restores the failure tracker and
         /// subtree-extent mark as well as the position. See
