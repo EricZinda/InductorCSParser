@@ -143,31 +143,50 @@ public static class UnicodeEnvironment
     }
 
     /// <summary>
-    /// The host's globalization settings can change how text is normalized, causing the same grammar
-    /// and input to produce different parse results on different machines. By default, the parser rejects
-    /// runtime normalization under settings known to cause these differences. Set this property to
-    /// <c>true</c> to allow it anyway. The default is <c>false</c>.
+    /// By default, the parser throws an exception if .NET is configured to skip Unicode normalization
+    /// or use Windows NLS instead of ICU. See
+    /// <a href="#InductorParser_Lexing_UnicodeEnvironment_AcceptHostGlobalization_remarks">Remarks</a>
+    /// for why these configurations are rejected by default.
+    /// <para>
+    /// Set this property to <c>true</c> to allow parsing with those settings. The default is <c>false</c>.
+    /// This property only applies when using <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>.
+    /// </para>
     /// </summary>
     /// <remarks>
     /// <para>
     /// This safeguard applies when <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>
-    /// is active. Invariant globalization makes <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
-    /// return the input unchanged. Windows NLS uses Windows' Unicode data instead of ICU's, which can
-    /// produce different normalization results. Under either setting, the first
+    /// is active because that implementation delegates normalization to .NET's
+    /// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>.
+    /// Its behavior depends on the .NET runtime's globalization settings and the operating system's Unicode support.
+    /// </para>
+    /// <para>
+    /// <b>Invariant globalization:</b> <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
+    /// returns the input unchanged instead of normalizing it. A grammar requesting normalization would
+    /// therefore run without it. For example, a precomposed accented letter and the same letter followed
+    /// by a combining accent could fail to match each other even though normalization should make them equivalent.
+    /// </para>
+    /// <para>
+    /// <b>Windows NLS:</b> normalization uses the Unicode data supplied by Windows instead of the ICU
+    /// library. Normalization still takes place, but differences in the Unicode data and implementation
+    /// can produce different results from a .NET configuration using ICU. A grammar tested with ICU
+    /// could therefore match different input when run with Windows NLS.
+    /// </para>
+    /// <para>
+    /// Under either setting, the first
     /// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(NormalizationForm?)</see> or
     /// <see cref="Rule.Parse(string)">Rule.Parse(string)</see> that requires normalization throws
     /// <see cref="InvalidOperationException"/> unless this property is <c>true</c>.
     /// </para>
     /// <para>
-    /// Set this to <c>true</c> only if you want the host's normalization behavior and accept that parse
-    /// results may differ between hosts. Set it at startup, before building grammars or parsing.
+    /// Set this to <c>true</c> only if you want the normalization behavior of your .NET configuration
+    /// and accept that parse results may differ between machines. Set it at startup, before building grammars or parsing.
     /// Like <see cref="Implementation">UnicodeEnvironment.Implementation</see>, this setting becomes fixed
     /// after the first segmentation or normalization query. Assigning it after that throws
     /// <see cref="InvalidOperationException"/>.
     /// </para>
     /// <para>
     /// This setting has no effect when <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>
-    /// is active, because the built-in implementations use their own Unicode data instead of the host's.
+    /// is active, because the built-in implementations use their own Unicode data instead of relying on .NET's globalization support.
     /// </para>
     /// </remarks>
     public static bool AcceptHostGlobalization

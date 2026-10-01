@@ -9,8 +9,7 @@ namespace InductorParser.Lexing;
 public enum UnicodeImplementation
 {
     /// <summary>
-    /// The right implementation for the runtime the app runs on,
-    /// chosen automatically. The library does no detection of
+    /// Let the parser choose the right implementation for the runtime the app runs on. The library does no detection of
     /// its own: it ships one assembly per target framework, each
     /// baking in what Automatic means, and the runtime picks which
     /// assembly it loads. In the net8.0 assembly Automatic means
