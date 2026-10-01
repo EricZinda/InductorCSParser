@@ -21,7 +21,7 @@ namespace InductorParser;
 public interface INormalizationReporter
 {
     /// <summary>
-    /// Reports that <paramref name="original"/>, text stored on <paramref name="rule"/>, can't be
+    /// Reports that <paramref name="original"/>, which is text stored on <paramref name="rule"/>, can't be
     /// matched under the grammar's normalization form. Compile lists every offender in the
     /// exception it throws, each with its suggested replacement, so the grammar author can see
     /// what to change.
@@ -32,7 +32,7 @@ public interface INormalizationReporter
     void ReportOffender(Rule rule, string original, string suggestedReplacement);
 
     /// <summary>
-    /// Reports that converting <paramref name="original"/>, text stored on <paramref name="rule"/>,
+    /// Reports that converting <paramref name="original"/>, which is text stored on <paramref name="rule"/>,
     /// to the grammar's normalization form failed because the text isn't well-formed: it contains
     /// an unpaired surrogate or U+FFFE. Compile lists the rule as an offender and attaches the
     /// failures to the exception it throws as its InnerException.
