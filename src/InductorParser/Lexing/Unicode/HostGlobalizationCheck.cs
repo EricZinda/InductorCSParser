@@ -50,14 +50,14 @@ internal enum HostGlobalizationStatus
 /// runtime-path Normalize or <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">NormalizationHelpers.IsNormalized</see>, and the first normalizing
 /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> or Parse in an affected process throws an actionable
 /// <see cref="InvalidOperationException"/> instead of quietly parsing
-/// differently. <see cref="UnicodeEnvironment.AcceptHostGlobalization">UnicodeEnvironment.AcceptHostGlobalization</see>
+/// differently. <see cref="UnicodeEnvironment.AllowNonstandardRuntimeNormalization">UnicodeEnvironment.AllowNonstandardRuntimeNormalization</see>
 /// is the deliberate opt-out.
 /// </summary>
 internal static class HostGlobalizationCheck
 {
     // True once the check has passed for this process, either because
     // detection said runtime normalization works or because
-    // UnicodeEnvironment.AcceptHostGlobalization opted in. Once true,
+    // UnicodeEnvironment.AllowNonstandardRuntimeNormalization opted in. Once true,
     // every later call skips straight past the check. A failed check
     // leaves it false on purpose: if a caller catches the exception
     // and parses again, the next normalizing call throws again,
@@ -82,7 +82,7 @@ internal static class HostGlobalizationCheck
     /// Throws <see cref="InvalidOperationException"/> if the host's
     /// globalization configuration makes the runtime's string.Normalize
     /// untrustworthy and
-    /// <see cref="UnicodeEnvironment.AcceptHostGlobalization">UnicodeEnvironment.AcceptHostGlobalization</see> hasn't
+    /// <see cref="UnicodeEnvironment.AllowNonstandardRuntimeNormalization">UnicodeEnvironment.AllowNonstandardRuntimeNormalization</see> hasn't
     /// opted in. Unnormalizable <paramref name="input"/> throws the
     /// public API's <see cref="ArgumentException"/> instead, so argument
     /// validation wins over host state, the same precedence the
@@ -116,7 +116,7 @@ internal static class HostGlobalizationCheck
             _status = status;
         }
         if (status == HostGlobalizationStatus.RuntimeNormalizes
-            || UnicodeEnvironment.AcceptHostGlobalization)
+            || UnicodeEnvironment.AllowNonstandardRuntimeNormalization)
         {
             _accepted = true;
             return;
@@ -212,7 +212,7 @@ internal static class HostGlobalizationCheck
         + "parsing: UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled "
         + "switches to the parser's built-in normalizer and segmenter, which never "
         + "touch host globalization and parse identically on every host, and "
-        + "UnicodeEnvironment.AcceptHostGlobalization = true ";
+        + "UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true ";
 
     private static InvalidOperationException CreateException(
         HostGlobalizationStatus status)

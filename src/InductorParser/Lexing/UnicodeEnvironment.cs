@@ -29,11 +29,11 @@ public static class UnicodeEnvironment
     private static volatile UnicodeImplementation _requested =
         UnicodeImplementation.Automatic;
 
-    // The opt-in from AcceptHostGlobalization. Written only under
+    // The opt-in from AllowNonstandardRuntimeNormalization. Written only under
     // _settingLock, volatile for the same lock-free getter reason as
     // _requested. HostGlobalizationCheck reads it after the freeze, and
     // the setter throws once frozen, so the value it reads is final.
-    private static volatile bool _acceptHostGlobalization;
+    private static volatile bool _allowNonstandardRuntimeNormalization;
 
     // Which implementation the dispatchers route to. Written exactly
     // once, inside _settingLock in ResolveAndFreeze, before the
@@ -146,7 +146,7 @@ public static class UnicodeEnvironment
     /// <summary>
     /// By default, the parser throws an exception if .NET is configured to skip Unicode normalization
     /// or use Windows NLS instead of ICU. See
-    /// <a href="#InductorParser_Lexing_UnicodeEnvironment_AcceptHostGlobalization_remarks">Remarks</a>
+    /// <a href="#InductorParser_Lexing_UnicodeEnvironment_AllowNonstandardRuntimeNormalization_remarks">Remarks</a>
     /// for why these configurations are rejected by default.
     /// <para>
     /// Set this property to <c>true</c> to allow parsing with those settings. The default is <c>false</c>.
@@ -215,9 +215,9 @@ public static class UnicodeEnvironment
     /// is active, because the built-in implementations use their own Unicode data instead of relying on .NET's globalization support.
     /// </para>
     /// </remarks>
-    public static bool AcceptHostGlobalization
+    public static bool AllowNonstandardRuntimeNormalization
     {
-        get => _acceptHostGlobalization;
+        get => _allowNonstandardRuntimeNormalization;
         set
         {
             lock (_settingLock)
@@ -225,13 +225,13 @@ public static class UnicodeEnvironment
                 if (_frozen)
                 {
                     throw new InvalidOperationException(
-                        "UnicodeEnvironment.AcceptHostGlobalization can't change after "
+                        "UnicodeEnvironment.AllowNonstandardRuntimeNormalization can't change after "
                         + "the first segmentation or normalization query, the same "
                         + "freeze rule as UnicodeEnvironment.Implementation (its "
                         + "exception message has the full reasoning). Set it once at "
                         + "startup, before building grammars or parsing.");
                 }
-                _acceptHostGlobalization = value;
+                _allowNonstandardRuntimeNormalization = value;
             }
         }
     }
@@ -245,7 +245,7 @@ public static class UnicodeEnvironment
     /// <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>, never <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>.
     /// Reading this property makes the choice final, even if no parsing has happened yet.
     /// After that, assigning <see cref="Implementation">UnicodeEnvironment.Implementation</see> or
-    /// <see cref="AcceptHostGlobalization">UnicodeEnvironment.AcceptHostGlobalization</see> throws
+    /// <see cref="AllowNonstandardRuntimeNormalization">UnicodeEnvironment.AllowNonstandardRuntimeNormalization</see> throws
     /// <see cref="InvalidOperationException"/>. Set those properties before reading this one.
     /// </summary>
     public static UnicodeImplementation ActiveImplementation =>
@@ -298,7 +298,7 @@ public static class UnicodeEnvironment
         lock (_settingLock)
         {
             _requested = UnicodeImplementation.Automatic;
-            _acceptHostGlobalization = false;
+            _allowNonstandardRuntimeNormalization = false;
             _useBundled = false;
             _frozen = false;
         }

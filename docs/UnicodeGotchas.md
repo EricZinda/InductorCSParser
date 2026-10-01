@@ -282,7 +282,7 @@ The built-in normalizer and segmenter run from their own tables and never touch 
 Under NLS you have a real choice because normalization still works. Opt into `Bundled` if you'd rather have the parser parse identically on every machine than match the host's NLS data. Or keep the parser on Runtime if you turned NLS on deliberately and want the parser to agree with the rest of your process:
 
 ```csharp
-UnicodeEnvironment.AcceptHostGlobalization = true;
+UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true;
 ```
 
 That line says the host's globalization is understood and the runtime implementations are wanted anyway. It suppresses the check under both modes, including invariant globalization, where it deliberately buys back the silent do-nothing normalization described above, so use it under invariant mode only if the grammars in the process genuinely don't depend on normalization. Both properties follow the same freeze rule: set them at startup, before building grammars or parsing. By the time the exception fires, the first normalization query has already frozen the choice, so the fix goes in startup code, not in a catch block around the parse.

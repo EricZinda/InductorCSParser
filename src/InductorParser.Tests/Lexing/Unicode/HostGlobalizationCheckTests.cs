@@ -10,7 +10,7 @@ namespace InductorParser.Tests;
 // Tests for the host-globalization check: when the Runtime
 // implementation is active and the process runs under invariant
 // globalization or Windows NLS, the first normalizing Compile or Parse
-// throws, and UnicodeEnvironment.AcceptHostGlobalization is the
+// throws, and UnicodeEnvironment.AllowNonstandardRuntimeNormalization is the
 // deliberate opt-out. These tests can't run under the real broken
 // modes, because globalization is fixed at process start and
 // GlobalizationOracleFixture fails the whole suite if this process
@@ -46,7 +46,7 @@ public class HostGlobalizationCheckTests
         Assert.That(exception.Message,
             Does.Contain("UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled"));
         Assert.That(exception.Message,
-            Does.Contain("UnicodeEnvironment.AcceptHostGlobalization = true"));
+            Does.Contain("UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true"));
     }
 
     [Test]
@@ -59,7 +59,7 @@ public class HostGlobalizationCheckTests
         Assert.That(exception.Message,
             Does.Contain("DOTNET_SYSTEM_GLOBALIZATION_USENLS"));
         Assert.That(exception.Message,
-            Does.Contain("UnicodeEnvironment.AcceptHostGlobalization = true"));
+            Does.Contain("UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true"));
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class HostGlobalizationCheckTests
         // decomposed input matches the precomposed literal under the
         // default FormC compile.
         HostGlobalizationCheck.ForceStatusForTesting(HostGlobalizationStatus.Invariant);
-        UnicodeEnvironment.AcceptHostGlobalization = true;
+        UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true;
 
         var rule = And(
             Literal(UnicodeExamples.LatinEAcutePrecomposedGrapheme),
@@ -183,11 +183,11 @@ public class HostGlobalizationCheckTests
     [Test]
     public void The_opt_out_defaults_to_false_and_keeps_the_last_write_before_the_freeze()
     {
-        Assert.That(UnicodeEnvironment.AcceptHostGlobalization, Is.False);
-        UnicodeEnvironment.AcceptHostGlobalization = true;
-        UnicodeEnvironment.AcceptHostGlobalization = false;
-        UnicodeEnvironment.AcceptHostGlobalization = true;
-        Assert.That(UnicodeEnvironment.AcceptHostGlobalization, Is.True);
+        Assert.That(UnicodeEnvironment.AllowNonstandardRuntimeNormalization, Is.False);
+        UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true;
+        UnicodeEnvironment.AllowNonstandardRuntimeNormalization = false;
+        UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true;
+        Assert.That(UnicodeEnvironment.AllowNonstandardRuntimeNormalization, Is.True);
     }
 
     [Test]
@@ -195,8 +195,8 @@ public class HostGlobalizationCheckTests
     {
         GraphemeHelpers.FirstClusterLength("a".AsSpan());
         var exception = Assert.Throws<InvalidOperationException>(
-            () => UnicodeEnvironment.AcceptHostGlobalization = true);
-        Assert.That(exception!.Message, Does.Contain("AcceptHostGlobalization"));
+            () => UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true);
+        Assert.That(exception!.Message, Does.Contain("AllowNonstandardRuntimeNormalization"));
         Assert.That(exception.Message, Does.Contain("before building grammars"));
     }
 

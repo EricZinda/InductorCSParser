@@ -35,7 +35,7 @@ public class HostGlobalizationChildProcessTests
         Assert.That(message,
             Does.Contain("UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled"));
         Assert.That(message,
-            Does.Contain("UnicodeEnvironment.AcceptHostGlobalization = true"));
+            Does.Contain("UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true"));
     }
 
     [Test]

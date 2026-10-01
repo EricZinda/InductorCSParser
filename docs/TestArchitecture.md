@@ -228,7 +228,7 @@ The recurring mistakes to avoid:
 
 ## The Unicode Implementation Setting
 
-`UnicodeEnvironment.Implementation` is one process-wide setting that picks the segmenter and normalizer together. The test architecture has one rule about it: no test sets it, except `UnicodeEnvironmentSettingTests` and `HostGlobalizationCheckTests`, the two fixtures whose whole job is testing the setting (and its neighbor `AcceptHostGlobalization`).
+`UnicodeEnvironment.Implementation` is one process-wide setting that picks the segmenter and normalizer together. The test architecture has one rule about it: no test sets it, except `UnicodeEnvironmentSettingTests` and `HostGlobalizationCheckTests`, the two fixtures whose whole job is testing the setting (and its neighbor `AllowNonstandardRuntimeNormalization`).
 
 Every other test runs on `Automatic`, and the first segmentation or normalization query freezes that to the build's default: `Runtime` on the net8.0 library build `dotnet test` loads, `Bundled` on the netstandard2.1 build Unity loads. That's the coverage plan. The same test sources run twice, once per platform, so each Compile-and-Parse test exercises the runtime implementations on CoreCLR and the built-in ones under IL2CPP, and no test has to touch the setting to make that happen.
 
@@ -268,10 +268,10 @@ Two suites establish different claims:
 The shipped library also detects host configurations for which the Runtime
 implementation hasn't been verified. Under NLS or invariant globalization,
 the first normalizing Compile or Parse throws unless the caller enables
-`UnicodeEnvironment.AcceptHostGlobalization`. `HostGlobalizationCheckTests`
+`UnicodeEnvironment.AllowNonstandardRuntimeNormalization`. `HostGlobalizationCheckTests`
 verify the exception and opt-out in-process.
 `HostGlobalizationChildProcessTests` start processes in the actual host modes
-to verify their detection. `AcceptHostGlobalization` only suppresses this
+to verify their detection. `AllowNonstandardRuntimeNormalization` only suppresses this
 safety check. It doesn't certify the host's Unicode behavior. An application
 that enables it must run its parser integration tests in a separate process
 started with the same globalization setting and, for NLS, on the same pinned
