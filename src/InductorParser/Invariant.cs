@@ -101,7 +101,8 @@ public static class Invariant
 
 /// <summary>
 /// The interpolated-string handler behind <see cref="Invariant.That(bool, InvariantInterpolatedStringHandler)">Invariant.That</see>.
-/// You never use it directly: passing a <c>$"..."</c> string to That makes the compiler build one
+/// You never use it directly: passing a <c>$"..."</c> string to
+/// <see cref="Invariant.That(bool, InvariantInterpolatedStringHandler)">Invariant.That</see> makes the compiler build one
 /// of these and route each literal and each hole through it. The handler formats nothing while the
 /// condition holds, which is what lets an invariant message include positions, lengths, and rule
 /// names at no cost on the success path.
