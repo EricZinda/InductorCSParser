@@ -31,8 +31,9 @@
 // The implementation is chosen by a process-wide setting, surfaced as
 // UnicodeEnvironment.Implementation and resolved at most once per
 // process. That one setting governs this segmenter and the UAX #15
-// normalizer (UnicodeNormalization) together, so the two can never
-// use different sources of Unicode data, and the first query from either
+// normalizer (UnicodeNormalization) together, selecting the built-in or the
+// runtime implementations for both. Runtime Unicode data versions may differ between
+// segmentation and normalization. The first query from either
 // freezes the choice. The default, UnicodeImplementation.Automatic,
 // means the right implementations for the runtime that loaded the
 // assembly: each target framework's build bakes in its own answer, set

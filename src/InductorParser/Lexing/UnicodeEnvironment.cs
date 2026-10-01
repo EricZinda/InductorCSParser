@@ -8,7 +8,8 @@ namespace InductorParser.Lexing;
 /// such as a letter with its combining marks or an emoji sequence.
 /// The normalizer converts text to the grammar's chosen Unicode normalization form,
 /// so equivalent spellings can match a single rule, such as a precomposed accented letter and a letter followed by a combining accent.
-/// One setting controls both operations so they use the same source of Unicode data.
+/// One setting selects either the built-in implementations or .NET's implementations for both operations.
+/// .NET's segmentation and normalization don't necessarily use the same version of Unicode data.
 /// </summary>
 public static class UnicodeEnvironment
 {
@@ -173,16 +174,10 @@ public static class UnicodeEnvironment
     /// </para>
     /// <para>
     /// In this mode, <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
-    /// returns the input unchanged instead of normalizing it. A grammar requesting normalization would
-    /// therefore run without it. For example, a precomposed accented letter and the same letter followed
+    /// silently returns the input unchanged: it neither normalizes the text nor reports that normalization
+    /// was skipped. If this mode is enabled inadvertently, a grammar requesting normalization would run
+    /// without it, creating hard-to-find parsing bugs. For example, a precomposed accented letter and the same letter followed
     /// by a combining accent could fail to match each other even though normalization should make them equivalent.
-    /// </para>
-    /// <para>
-    /// The parser checks that normalization actually works by having .NET normalize <c>e</c> followed
-    /// by a combining acute accent to Form C and checking that the result is the single precomposed letter <c>é</c>.
-    /// If that check fails, the parser rejects runtime normalization by default. It also checks .NET's internal
-    /// mode flag when available so the error can identify invariant globalization specifically.
-    /// The normalization check still protects against skipped normalization when that flag can't be read.
     /// </para>
     /// <para>
     /// <b>Windows NLS:</b> National Language Support is Windows' built-in globalization service.
@@ -195,20 +190,22 @@ public static class UnicodeEnvironment
     /// <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/globalization-icu#icu-on-windows">.NET's ICU and NLS selection</a>.
     /// </para>
     /// <para>
-    /// With NLS, normalization uses Windows' Unicode data instead of ICU's.
-    /// Normalization still takes place, but differences in the Unicode data and implementation
-    /// can produce different results from a .NET configuration using ICU. A grammar tested with ICU
-    /// could therefore match different input when run with Windows NLS.
+    /// With NLS, .NET normalizes both the grammar's literals and the input using Windows' normalization support.
+    /// Another machine using ICU may have different Unicode data or normalization behavior, so the same
+    /// grammar and input can produce different parse results. This safeguard protects against that
+    /// difference between machines.
     /// </para>
     /// <para>
     /// When .NET is running in invariant globalization mode or using Windows NLS, the first
     /// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile(NormalizationForm?)</see> or
     /// <see cref="Rule.Parse(string)">Rule.Parse(string)</see> that requires normalization throws
     /// <see cref="InvalidOperationException"/> unless this property is <c>true</c>.
+    /// This prevents the application from silently using an unusual configuration that can change parse outcomes.
+    /// Setting this property to <c>true</c> explicitly opts into that behavior after you have considered its effect on your grammar.
     /// </para>
     /// <para>
-    /// Set this to <c>true</c> only if you want the normalization behavior of your .NET configuration
-    /// and accept that parse results may differ between machines. Set it at startup, before building grammars or parsing.
+    /// Set this to <c>true</c> to opt into one of these more unusual configurations if you understand
+    /// and accept the implications. Set it at startup, before building grammars or parsing.
     /// Like <see cref="Implementation">UnicodeEnvironment.Implementation</see>, this setting becomes fixed
     /// after the first segmentation or normalization query. Assigning it after that throws
     /// <see cref="InvalidOperationException"/>.
