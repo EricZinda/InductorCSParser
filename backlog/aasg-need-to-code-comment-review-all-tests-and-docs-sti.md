@@ -24,9 +24,3 @@ Reference:
     Writing a Rule
 
 Fixes:
-.NET's segmentation and normalization don't necessarily use the same version of Unicode data.
-what does this mean?
-
-
-By default, the parser throws an exception if .NET is configured to skip Unicode normalization or use Windows NLS instead of ICU.
-For normalization and grapheme segmentation

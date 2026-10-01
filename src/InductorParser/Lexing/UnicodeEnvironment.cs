@@ -9,8 +9,39 @@ namespace InductorParser.Lexing;
 /// The normalizer converts text to the grammar's chosen Unicode normalization form,
 /// so equivalent spellings can match a single rule, such as a precomposed accented letter and a letter followed by a combining accent.
 /// One setting selects either the built-in implementations or .NET's implementations for both operations.
-/// .NET's segmentation and normalization don't necessarily use the same version of Unicode data.
+/// The two choices can parse some input differently, so the remarks below say how to pick.
 /// </summary>
+/// <remarks>
+/// <para><b>Choosing between the runtime and built-in implementations</b></para>
+/// <para>
+/// The built-in pair (<see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>)
+/// implements one Unicode version, 16.0, for both operations and reads nothing but its own tables, so
+/// a grammar parses identically on every machine and every runtime. The runtime pair
+/// (<see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>) follows .NET:
+/// segmentation runs at the Unicode version compiled into the .NET runtime, and normalization runs at
+/// whatever version the host's ICU library supplies. Those two versions can differ from each other and
+/// from machine to machine. The gap only shows up for characters added or recategorized between the
+/// versions involved, so most grammars parse the same either way, but when it does show up nothing
+/// reports it.
+/// </para>
+/// <para>
+/// The choice comes down to what the parser has to agree with. If it has to agree with itself on other
+/// machines (a client and server exchanging parse trees, golden-file tests, anything serialized or
+/// compared across environments), use <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>.
+/// If it has to agree with other Unicode work in the same
+/// process (string comparisons, normalization your own code does with .NET APIs, text that other .NET
+/// components segment), use <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>,
+/// because the built-in pair could disagree with those by exactly that version gap.
+/// </para>
+/// <para>
+/// The default on the <c>net8.0</c> build is Runtime because most applications mix the parser with
+/// other .NET string handling, and a parser that disagrees with the rest of its own process is a worse
+/// surprise than one that disagrees with a different machine. An application with cross-machine
+/// requirements knows it has them and opts into the built-in pair. The <c>netstandard2.1</c> build
+/// defaults to the built-in pair because the runtimes that load it (Unity's Mono and IL2CPP) ship
+/// Unicode support the parser can't rely on.
+/// </para>
+/// </remarks>
 public static class UnicodeEnvironment
 {
     // What UnicodeImplementation.Automatic means in this build. The
@@ -96,6 +127,12 @@ public static class UnicodeEnvironment
     /// </description></item>
     /// </list>
     /// <para>
+    /// The <see cref="UnicodeEnvironment"/> remarks explain when to override the automatic choice:
+    /// <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see> when parse results
+    /// must match across machines, <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>
+    /// when the parser must agree with other Unicode handling in the same process.
+    /// </para>
+    /// <para>
     /// To override the automatic choice, set this property at startup, before building grammars or parsing.
     /// The first segmentation or normalization operation makes the choice final for the life of the process.
     /// This can happen when constructing a <see cref="Rules.Token(string)">Rules.Token(string)</see> rule,
@@ -145,7 +182,8 @@ public static class UnicodeEnvironment
 
     /// <summary>
     /// By default, the parser throws an exception if .NET is configured to skip Unicode normalization
-    /// or use Windows NLS instead of ICU. See
+    /// or use Windows NLS instead of ICU. This concerns normalization only. Grapheme segmentation
+    /// uses tables compiled into the .NET runtime and isn't affected by either setting. See
     /// <a href="#InductorParser_Lexing_UnicodeEnvironment_AllowNonstandardRuntimeNormalization_remarks">Remarks</a>
     /// for why these configurations are rejected by default.
     /// <para>
@@ -201,7 +239,6 @@ public static class UnicodeEnvironment
     /// <see cref="Rule.Parse(string)">Rule.Parse(string)</see> that requires normalization throws
     /// <see cref="InvalidOperationException"/> unless this property is <c>true</c>.
     /// This prevents the application from silently using an unusual configuration that can change parse outcomes.
-    /// Setting this property to <c>true</c> explicitly opts into that behavior after you have considered its effect on your grammar.
     /// </para>
     /// <para>
     /// Set this to <c>true</c> to opt into one of these more unusual configurations if you understand
