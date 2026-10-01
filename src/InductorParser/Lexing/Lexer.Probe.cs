@@ -16,11 +16,23 @@ public sealed partial class Lexer
     /// lookahead leaves no trace in the parse.
     /// </summary>
     /// <remarks>
-    /// Probes nest the same way transactions do, as <c>using</c> blocks, and the two mix freely.
-    /// A probe inside a transaction rolls back its own reads and failures without touching the
-    /// transaction. A transaction inside a probe is undone by the probe's rollback even if it
-    /// committed, and any failures it recorded go with it. That's what makes a probe safe for
-    /// lookahead: when it rolls back, the parse looks exactly as it did before the probe opened.
+    /// <para><b>How nesting works</b></para>
+    /// <para>
+    /// Transactions and probes can contain either kind of scope. Open them in nested <c>using</c>
+    /// blocks so each inner scope closes before its enclosing scope. Each scope saves the lexer
+    /// position when it opens. Rolling back restores that position, including undoing reads made
+    /// by any nested scopes. Committing an inner scope only prevents its own rollback. An enclosing
+    /// scope can still roll back past it. This rule applies to every combination of transactions and probes.
+    /// </para>
+    /// <para><b>What each scope restores</b></para>
+    /// <para>
+    /// A <see cref="Transaction">Lexer.Transaction</see> rolls back the lexer position but keeps recorded
+    /// failures, including failures from nested scopes, so they can help explain why parsing failed.
+    /// A <see cref="Probe">Lexer.Probe</see> rolls back both the position and recorded failures to what they
+    /// were when it opened. This also discards failures from nested scopes, even if those scopes committed.
+    /// Use a probe for lookahead that shouldn't affect the eventual error message.
+    /// Both kinds roll back when their <c>using</c> block ends unless committed.
+    /// </para>
     /// Open one with <see cref="InductorParser.Lexing.Lexer.BeginProbe">Lexer.BeginProbe()</see>.
     /// </remarks>
     public struct Probe : IDisposable

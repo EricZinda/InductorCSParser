@@ -46,13 +46,23 @@ public sealed partial class Lexer
     /// transaction opened unless <see cref="Commit">Lexer.Transaction.Commit()</see> was called first.
     /// </summary>
     /// <remarks>
-    /// Transactions nest, one per rule invocation, and always as a <c>using</c> block so an inner
-    /// one closes before the outer one that contains it. An inner Commit is local: it keeps the
-    /// inner rule's reads only until an enclosing transaction decides. If an outer rule then
-    /// fails, its rollback undoes everything inside it, committed or not. Only the outermost
-    /// successful match is final. Failures recorded inside a transaction survive its rollback,
-    /// because a rejected branch is still evidence about where the input went wrong. To discard
-    /// them too, use a <see cref="Probe"/>.
+    /// <para><b>How nesting works</b></para>
+    /// <para>
+    /// Transactions and probes can contain either kind of scope. Open them in nested <c>using</c>
+    /// blocks so each inner scope closes before its enclosing scope. Each scope saves the lexer
+    /// position when it opens. Rolling back restores that position, including undoing reads made
+    /// by any nested scopes. Committing an inner scope only prevents its own rollback. An enclosing
+    /// scope can still roll back past it. This rule applies to every combination of transactions and probes.
+    /// </para>
+    /// <para><b>What each scope restores</b></para>
+    /// <para>
+    /// A <see cref="Transaction">Lexer.Transaction</see> rolls back the lexer position but keeps recorded
+    /// failures, including failures from nested scopes, so they can help explain why parsing failed.
+    /// A <see cref="Probe">Lexer.Probe</see> rolls back both the position and recorded failures to what they
+    /// were when it opened. This also discards failures from nested scopes, even if those scopes committed.
+    /// Use a probe for lookahead that shouldn't affect the eventual error message.
+    /// Both kinds roll back when their <c>using</c> block ends unless committed.
+    /// </para>
     /// <para>
     /// A rule writer rarely opens one by hand: Rule.TryParse wraps every
     /// <see cref="InductorParser.Rule.TryParseRule(InductorParser.Lexing.Lexer,System.Int32,InductorParser.SyntaxTree.FlattenType,System.Collections.Generic.List{InductorParser.SyntaxTree.Symbol})">Rule.TryParseRule</see>
