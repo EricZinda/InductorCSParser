@@ -1,7 +1,7 @@
 namespace InductorParser.SyntaxTree;
 
 /// <summary>
-/// The three non-overlapping id ranges a SymbolId can fall into: rune,
+/// The three non-overlapping id ranges a <see cref="SymbolId"/> can fall into: rune,
 /// built-in, and custom. Carving the int this way keeps the three kinds of
 /// symbol from ever colliding, however big a grammar gets.
 /// </summary>
