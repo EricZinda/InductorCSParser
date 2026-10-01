@@ -1,12 +1,10 @@
 namespace InductorParser.Lexing;
 
 /// <summary>
-/// Which Unicode implementation the parser uses, covering both <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
-/// grapheme cluster segmentation (token boundaries, Token and
-/// <see cref="InductorParser.TokenSet.Graphemes(System.String[])">TokenSet.Graphemes</see> validation, error positions, the
-/// <see cref="GraphemeHelpers"/> methods) and Unicode normalization
-/// (input at Parse, literals and token sets at <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>, position
-/// mapping, the <see cref="NormalizationHelpers"/> methods).
+/// Which Unicode implementation the parser uses for
+/// <a href="https://www.unicode.org/reports/tr29/">grapheme cluster segmentation</a> and
+/// <a href="https://www.unicode.org/reports/tr15/">Unicode normalization</a>.
+/// Set this through <see cref="UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>.
 /// </summary>
 public enum UnicodeImplementation
 {

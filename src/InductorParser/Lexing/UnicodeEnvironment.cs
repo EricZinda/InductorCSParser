@@ -73,27 +73,42 @@ public static class UnicodeEnvironment
     private static readonly object _settingLock = new object();
 
     /// <summary>
-    /// Which Unicode implementation this process uses, for both
-    /// segmentation and normalization. Defaults to
-    /// <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>: the built-in
-    /// implementations in the netstandard2.1 assembly (the build Unity
-    /// and other pre-net8.0 hosts load), the runtime's StringInfo and
-    /// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> in the net8.0 assembly. Set it once at startup,
-    /// before building grammars or parsing. The first segmentation or
-    /// normalization query (constructing a Token rule, compiling a
-    /// grammar, parsing, mapping positions, or calling any
-    /// <see cref="GraphemeHelpers"/> / <see cref="NormalizationHelpers"/>
-    /// method) freezes the choice for the life of the process, and
-    /// setting it after that throws
-    /// <see cref="InvalidOperationException"/>. Frozen because cluster
-    /// boundaries and normalized projections are cached and reused,
-    /// and compiled grammars store literals rewritten by the chosen
-    /// implementation, so switching mid-process would mix answers from
-    /// two implementations. Reading this property never freezes
-    /// anything and returns the requested value, which may still be
-    /// Automatic. For the implementation actually in use, read
-    /// <see cref="ActiveImplementation">UnicodeEnvironment.ActiveImplementation</see>.
+    /// Chooses the Unicode implementation used for segmentation and normalization throughout the process.
+    /// The default is <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// With <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>, the choice depends
+    /// on which build of InductorParser your application loads:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// The <c>netstandard2.1</c> build, used by Unity and compatible hosts that can't load the
+    /// <c>net8.0</c> build, uses <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>.
+    /// Both grapheme segmentation and normalization use the implementations and Unicode data included in InductorParser.
+    /// </description></item>
+    /// <item><description>
+    /// The <c>net8.0</c> build uses <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see>.
+    /// Grapheme segmentation uses .NET's <see cref="System.Globalization.StringInfo">StringInfo</see>, and
+    /// normalization uses <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>.
+    /// Both rely on the Unicode support provided by the .NET runtime and its host environment.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// To override the automatic choice, set this property at startup, before building grammars or parsing.
+    /// The first segmentation or normalization operation makes the choice final for the life of the process.
+    /// This can happen when constructing a <see cref="Rules.Token(string)">Rules.Token(string)</see> rule,
+    /// compiling a grammar, parsing, mapping positions, or using <see cref="GraphemeHelpers"/> or
+    /// <see cref="NormalizationHelpers"/>. Assigning this property after that throws <see cref="InvalidOperationException"/>.
+    /// The choice must remain fixed because the parser caches Unicode results and stores normalized literals in compiled grammars.
+    /// </para>
+    /// <para>
+    /// Reading this property doesn't make the choice final. It returns the requested setting, which can
+    /// still be <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>.
+    /// Read <see cref="ActiveImplementation">UnicodeEnvironment.ActiveImplementation</see> to find out
+    /// whether the runtime's or the built-in implementation was selected. Reading that property does make the choice final.
+    /// </para>
+    /// </remarks>
     public static UnicodeImplementation Implementation
     {
         get => _requested;
@@ -177,12 +192,16 @@ public static class UnicodeEnvironment
     }
 
     /// <summary>
-    /// The implementation being used. It's one of
+    /// The implementation selected by <see cref="Implementation">UnicodeEnvironment.Implementation</see>.
+    /// If that property is set to <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>,
+    /// this property reports which implementation is chosen automatically. Otherwise, it reports the same value.
+    /// The result is always
     /// <see cref="UnicodeImplementation.Runtime">UnicodeImplementation.Runtime</see> or
     /// <see cref="UnicodeImplementation.Bundled">UnicodeImplementation.Bundled</see>, never <see cref="UnicodeImplementation.Automatic">UnicodeImplementation.Automatic</see>.
-    /// Reading it resolves and freezes the choice the same way the
-    /// first segmentation or normalization query does, so the answer
-    /// can never be invalidated by a later change.
+    /// Reading this property makes the choice final, even if no parsing has happened yet.
+    /// After that, assigning <see cref="Implementation">UnicodeEnvironment.Implementation</see> or
+    /// <see cref="AcceptHostGlobalization">UnicodeEnvironment.AcceptHostGlobalization</see> throws
+    /// <see cref="InvalidOperationException"/>. Set those properties before reading this one.
     /// </summary>
     public static UnicodeImplementation ActiveImplementation =>
         ResolveUseBundled()
