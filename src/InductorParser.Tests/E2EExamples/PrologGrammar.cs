@@ -5,6 +5,7 @@ namespace InductorParser.Tests;
 
 // Prolog grammar: Inductor Parser port of InductorProlog's PrologParser.h
 // (https://github.com/EricZinda/InductorProlog/blob/master/src/FXPlatform/Prolog/PrologParser.h).
+// InductorProlog is MIT licensed, same author as this project.
 //
 // Covers: line comments (% ... CRLF), block comments (/* ... */), atoms
 // (bare words, single- and double-quoted, numeric, math-symbol runs, !),

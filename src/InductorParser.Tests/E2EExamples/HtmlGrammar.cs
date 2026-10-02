@@ -5,6 +5,7 @@ namespace InductorParser.Tests;
 
 // HTML grammar: Inductor Parser port of the C++ InductorParser HTML parser
 // (https://github.com/EricZinda/InductorParser/blob/master/src/FXPlatform/Languages/HtmlParser.h).
+// The C++ InductorParser is MIT licensed, same author as this project.
 // Covers a pragmatic subset of
 // HTML: tag names, attributes (four flavors: double-quoted, single-quoted,
 // unquoted, and empty), start tags, void start tags, end tags, XML-style

@@ -11,7 +11,8 @@ namespace InductorParser.Tests;
 // already cover everything in InductorProlog's PrologCompilerTests.cpp
 // (https://github.com/EricZinda/InductorProlog). This file pulls in the
 // parser inputs that the C++ HTN tests rely on but that the existing
-// corpus doesn't reach.
+// corpus doesn't reach. Both repos are MIT licensed, same author as this
+// project.
 //
 // Sources (all under https://github.com/EricZinda/InductorHtn/blob/master/):
 //   src/Tests/Htn/HtnCompilerTests.cpp

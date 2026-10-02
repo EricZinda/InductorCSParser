@@ -78,7 +78,8 @@
     <EmbeddedResource Remove="Unity\**" />
   </ItemGroup>
 
-  <!-- Real-world Prolog / HTN fixture files from the InductorHtn repo,
+  <!-- Real-world Prolog / HTN fixture files from the InductorHtn repo
+       (MIT licensed, see the note in PrologGrammarTests.cs for authorship),
        used as end-to-end parse corpus for PrologGrammarTests. Copied to
        the test output directory so tests can read them as plain files. -->
   <ItemGroup>

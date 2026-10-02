@@ -7,7 +7,9 @@
 
 // Pegasus JSON grammar, wiki-example style.
 //
-// Direct port of the style used in the Pegasus wiki JSON example. Every
+// Direct port of the style used in the Pegasus wiki JSON example
+// (https://github.com/otac0n/Pegasus, MIT License, Copyright John Gietzen).
+// The grammar itself was written for this benchmark. Every
 // string-body character goes through a `stringChar = escape / literal`
 // ordered choice and a `literal` rule invocation, and object/array members
 // are collected with a recursive `first:X rest:restX*` pair that has to be

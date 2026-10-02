@@ -5,6 +5,7 @@ namespace InductorParser.Tests;
 
 // CSS grammar: Inductor Parser port of the C++ InductorParser CSS parser
 // (https://github.com/EricZinda/InductorParser/blob/master/src/FXPlatform/Languages/CssParser.h).
+// The C++ InductorParser is MIT licensed, same author as this project.
 // Covers a pragmatic subset of
 // CSS 2.1: block comments, whitespace, identifiers, single/double quoted
 // strings with \\" and \<CR><LF> escapes, all four simple selector kinds

@@ -533,6 +533,11 @@ public class PrologGrammarTests
     // End-to-end sanity: the grammar must parse actual documents the HTN
     // project ships and uses, not just hand-crafted one-liners. Files are
     // copied to the test output directory by the csproj.
+    //
+    // InductorHtn is MIT licensed. Taxi.htn and Game.htn are by the
+    // InductorHtn author. JordanAdventure.pl was written by Jordan Isaacs
+    // (2019) and is distributed with that repo under its MIT license. All
+    // three are copied here unmodified.
     // ---------------------------------------------------------------
 
     private static string LoadFixture(string fileName)

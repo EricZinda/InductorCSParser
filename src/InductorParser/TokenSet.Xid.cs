@@ -36,7 +36,11 @@ namespace InductorParser;
 //   PropList:               https://www.unicode.org/Public/17.0.0/ucd/PropList.txt
 //   DerivedCoreProperties:  https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt
 //   DerivedGeneralCategory: https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt
-// 
+//
+// The ranges below are transcribed from those files. The data is copyright
+// Unicode, Inc. and used under the Unicode License v3, the same terms as the
+// generated tables in Lexing/Unicode (see Lexing/Unicode/LICENSE-UNICODE.txt).
+//
 // Here are the definitions from the DerivedCoreProperties.txt header (they are described next).
 //
 //   ID_Start     = Lu + Ll + Lt + Lm + Lo + Nl

@@ -1,5 +1,5 @@
 # How I built this
-I needed a PEG parser for a C# project I'm building so I wanted to port the C++ parser I had already open sourced to .NET. Since it was April 2026, I thought this would be a good experiment to understand the capabilities of LLMs as they stood then.
+I needed a PEG parser for a C# project I'm building so I wanted to port the [C++ parser I had already open sourced](https://github.com/EricZinda/InductorParser) to .NET. Since it was April 2026, I thought this would be a good experiment to understand the capabilities of LLMs as they stood then.
 
 I was part of the leadership team that delivered the .NET Framework 1.0, alongside [Scott Gellock](https://www.linkedin.com/in/sgellock/) and [Destry Hood](https://www.linkedin.com/in/destry-hood-336790112/) and I managed teams that delivered several other framework components afterwards. I have a lot of experience designing, building and shipping this type of product. So, I was excited to go down that same road using an LLM to get a real understanding of their strengths and weaknesses in a domain I understood deeply.
 
