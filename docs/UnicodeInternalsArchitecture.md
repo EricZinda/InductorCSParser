@@ -82,6 +82,8 @@ The line and both columns also have one-based counterparts for human-facing mess
 
 The char index is stored on the parse result. Every other unit is computed lazily from it and the original input the one time it's asked for, so a caller only pays for the units it actually reads.
 
+Every one of these units points into the original input, even when the parser matched against a normalized copy of it. How a position in the normalized text gets mapped back to the original is its own topic, covered in [Mapping Positions After Normalization](MappingPositionsAfterNormalization.md).
+
 `ParseResult` exposes the minimum useful set:
 
 ```csharp

@@ -17,7 +17,7 @@
 <body>
 
 <h1>JSON parser performance by shape</h1>
-<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 10 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: 2026-07-24 11:30</strong></div>
+<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 10 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: 2026-10-02 12:51</strong></div>
 
 <div class="chart-wrapper">
   <canvas id="chart"></canvas>
@@ -42,8 +42,8 @@ const labels = [
   "ParlotCompiled",
   "Pidgin",
   "Superpower",
-  "PegasusOptimized",
   "InductorParserToken",
+  "PegasusOptimized",
   "InductorParserTyped",
   "PegasusWiki",
   "Sprache"
@@ -54,7 +54,7 @@ const data = {
   datasets: [
     {
       label: "Big",
-      data: [20.63, 52.48, 53.19, 312.52, 547.67, 547.84, 552.54, 593.38, 617.71, 1533.70],
+      data: [20.81, 51.75, 52.49, 307.31, 546.78, 551.35, 566.21, 587.29, 601.96, 1422.18],
       borderColor: "#1f77b4",
       backgroundColor: "#1f77b4",
       borderWidth: 2,
@@ -62,7 +62,7 @@ const data = {
     },
     {
       label: "Deep",
-      data: [77.16, 35.30, 34.62, 308.72, null, 264.57, 335.58, 364.77, 271.30, 1520.20],
+      data: [76.31, 34.29, 34.70, 308.19, null, 337.21, 263.15, 378.11, 271.32, 1328.47],
       borderColor: "#ff7f0e",
       backgroundColor: "#ff7f0e",
       borderWidth: 2,
@@ -71,7 +71,7 @@ const data = {
     },
     {
       label: "Long",
-      data: [13.70, 45.01, 45.11, 251.20, 417.04, 373.65, 434.72, 480.92, 431.95, 1196.31],
+      data: [13.92, 44.46, 45.65, 239.75, 407.81, 413.26, 364.92, 495.12, 399.71, 1164.16],
       borderColor: "#2ca02c",
       backgroundColor: "#2ca02c",
       borderWidth: 2,
@@ -79,7 +79,7 @@ const data = {
     },
     {
       label: "Wide",
-      data: [10.06, 27.15, 26.15, 168.14, 277.47, 285.26, 268.70, 284.11, 331.72, 682.02],
+      data: [10.10, 25.78, 28.16, 168.80, 269.19, 258.59, 287.61, 288.42, 325.95, 661.17],
       borderColor: "#d62728",
       backgroundColor: "#d62728",
       borderWidth: 2,
@@ -96,7 +96,7 @@ new Chart(document.getElementById("chart"), {
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
     plugins: {
-      title: { display: true, text: "JSON parser performance — run 2026-07-24 11:30", font: { size: 14 }, padding: { top: 4, bottom: 12 } },
+      title: { display: true, text: "JSON parser performance — run 2026-10-02 12:51", font: { size: 14 }, padding: { top: 4, bottom: 12 } },
       legend: { position: "top", labels: { boxWidth: 14, padding: 14 } },
       tooltip: {
         callbacks: {

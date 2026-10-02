@@ -2,7 +2,7 @@
 
 ## Why Port
 
-The Inductor Parser started life as a C++ template library written for Exospecies. It runs on Windows, macOS, and iOS and has been in production for years. The goal now is to get the same parser running inside a Unity game, including on WebGL, without losing what made the original nice to use: a small, readable, debuggable PEG parser where grammar rules read like the thing you're trying to parse.
+The Inductor Parser started life as a [C++ template library](https://github.com/EricZinda/InductorParser) written for Exospecies. It runs on Windows, macOS, and iOS and has been in production for years. The goal now is to get the same parser running inside a Unity game, including on WebGL, without losing what made the original nice to use: a small, readable, debuggable PEG parser where grammar rules read like the thing you're trying to parse.
 
 Unity can host C++ as a native plugin on some targets, but not on WebGL (which compiles through Emscripten and has no native plugin story worth relying on) and not cleanly on iOS (where you'd be fighting the build system, App Store rules, and the IL2CPP linker). The path that actually works across every Unity target is to rewrite the parser in C# and ship it as a managed DLL.
 
