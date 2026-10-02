@@ -6,11 +6,11 @@ I was part of the leadership team that delivered the .NET Framework 1.0, alongsi
 ## What I did
 At the point where I consider it V1 done, I had worked for ~62 mostly 8ish hour days to produce this. Let's call that 3 months of full-time work. Without Claude, I would have delivered something in that amount of time, I am sure. However, what Claude enabled was a much bigger scope of project than I would have tackled myself in that same time. For example:
 
-- I would not have attempted to make a "Unicode-first" PEG parser ([Unicode Internals Architecture](../UnicodeInternalsArchitecture.md) and [Unicode Gotchas](../UnicodeGotchas.md) show what that meant). That's just too much spec to read and understand. Claude was a good teacher (assuming I asked for citations) and that enabled me to tackle Unicode which I think is hugely valuable. <!-- style-lint-ok: author's own voice -->
-- I would not have built a performance harness (the [Rebar harness](../../ExperimentalSrc/BenchMarks/Rebar/README.md) and the [JSON benchmarks](../../ExperimentalSrc/BenchMarks/README.md)). Yes, I would have had a few simple benchmarks for smoke testing performance, but no comparisons to other frameworks, no detailed testing across Regex expressions, etc. <!-- style-lint-ok: author's own voice -->
-- I would not have done *nearly* the amount of app-building using the framework. Claude could take an open source project that used a parser and rewrite it using mine and show me the results and the pros and cons. Much of this code I threw away and just kept the learnings, but a few I kept in the project (the [E2ESamples](../../E2ESamples/) folder, for example [Newsboat](../../E2ESamples/Newsboat/), [TOML](../../E2ESamples/Toml/), and [PEP 508](../../E2ESamples/Pep508/README.md)). <!-- style-lint-ok: author's own voice -->
-- I would not have done *nearly* the amount of automated and ad hoc testing. Claude is an absolute monster for finding bugs and writing tests (the [BugSearchLog](../BugSearchLog/) has every bug hunt). I simply would not have had the patience for it. <!-- style-lint-ok: author's own voice -->
-- I was able to do sweeping changes that I would have just lived with because Claude made the cost much cheaper ([move to the latest Unicode](../UnicodeGotchas.md#token-segmentation-across-runtimes), [change the fundamental unit the lexer tokenizes](ExpandRuneSet.md), rename small things that had a lot of dumb costs to change)
+- I would not have attempted to make a "Unicode-first" PEG parser ([Unicode Internals Architecture](UnicodeInternalsArchitecture.md) and [Unicode Gotchas](UnicodeGotchas.md) show what that meant). That's just too much spec to read and understand. Claude was a good teacher (assuming I asked for citations) and that enabled me to tackle Unicode which I think is hugely valuable. <!-- style-lint-ok: author's own voice -->
+- I would not have built a performance harness (the [Rebar harness](../ExperimentalSrc/BenchMarks/Rebar/README.md) and the [JSON benchmarks](../ExperimentalSrc/BenchMarks/README.md)). Yes, I would have had a few simple benchmarks for smoke testing performance, but no comparisons to other frameworks, no detailed testing across Regex expressions, etc. <!-- style-lint-ok: author's own voice -->
+- I would not have done *nearly* the amount of app-building using the framework. Claude could take an open source project that used a parser and rewrite it using mine and show me the results and the pros and cons. Much of this code I threw away and just kept the learnings, but a few I kept in the project (the [E2ESamples](../E2ESamples/) folder, for example [Newsboat](../E2ESamples/Newsboat/), [TOML](../E2ESamples/Toml/), and [PEP 508](../E2ESamples/Pep508/README.md)). <!-- style-lint-ok: author's own voice -->
+- I would not have done *nearly* the amount of automated and ad hoc testing. Claude is an absolute monster for finding bugs and writing tests (the [BugSearchLog](BugSearchLog/) has every bug hunt). I simply would not have had the patience for it. <!-- style-lint-ok: author's own voice -->
+- I was able to do sweeping changes that I would have just lived with because Claude made the cost much cheaper ([move to the latest Unicode](UnicodeGotchas.md#token-segmentation-across-runtimes), [change the fundamental unit the lexer tokenizes](Archive/ExpandRuneSet.md), rename small things that had a lot of dumb costs to change)
 - I was able to do throwaway tests and proof of concepts for a myriad of things I just wouldn't have had time to investigate. Is X any faster than Y? What do other parsers do for this problem? What if we made this part private? etc.
 
 ### Technology
@@ -25,13 +25,13 @@ Let's start with what I didn't do: vibe coding. This was not a "tell Claude what
 
 I acted as (from a Microsoft job title perspective) the Program Manager, Dev Lead and Test Lead for the project. Claude wrote 99% of the code and comments, and probably 75% of the documentation (rough estimates). I code/doc reviewed *all* of it, and we often iterated. I treated the project as my own code and design. I cared about every line.
 
-*Design Phase*: At the start of the project I worked with Claude like I'd work with the developer of an area I was responsible for Program Managing. I laid out requirements, design goals, API sketches ("be like my C++ PEG Parsing framework") and then read through Claude's proposed plan and design. We iterated a ton until we had design docs that I agreed with ([Code Architecture](../CodeArchitecture.md), [Error Architecture](../ErrorArchitecture.md), [Test Architecture](../TestArchitecture.md), and [Unicode Internals Architecture](../UnicodeInternalsArchitecture.md) are the ones that survived to ship).
+*Design Phase*: At the start of the project I worked with Claude like I'd work with the developer of an area I was responsible for Program Managing. I laid out requirements, design goals, API sketches ("be like my C++ PEG Parsing framework") and then read through Claude's proposed plan and design. We iterated a ton until we had design docs that I agreed with ([Code Architecture](CodeArchitecture.md), [Error Architecture](ErrorArchitecture.md), [Test Architecture](TestArchitecture.md), and [Unicode Internals Architecture](UnicodeInternalsArchitecture.md) are the ones that survived to ship).
 
 *Implementation Phase*: I mostly had my dev lead hat on here and assigned Claude coding and test automation tasks and exhaustively reviewed what it wrote. Again, much iteration on every commit here.
 
-*Code Complete/Ad Hoc Testing Phase*: I had Claude write [extensive tests](../../src/InductorParser.Tests/) for each feature it wrote, but after coding was done, I had it do ad hoc testing too. Here, I'd have Claude [find bugs](../BugSearchLog/) and fix them, trying as many different ways as I could to have it poke and prod the code from different directions: security, performance, usability, etc. Again, I would review the bugs, and code review the fixes. I'd make sure the test suites filled in coverage for areas where bugs exposed test gaps.
+*Code Complete/Ad Hoc Testing Phase*: I had Claude write [extensive tests](../src/InductorParser.Tests/) for each feature it wrote, but after coding was done, I had it do ad hoc testing too. Here, I'd have Claude [find bugs](BugSearchLog/) and fix them, trying as many different ways as I could to have it poke and prod the code from different directions: security, performance, usability, etc. Again, I would review the bugs, and code review the fixes. I'd make sure the test suites filled in coverage for areas where bugs exposed test gaps.
 
-*Documentation*: This happened all along the way. Any of the documents that use the first person "I" were written by me, usually with Claude suggesting edits (the [readme](../../readme.md) and this document, for example). All the others were in reverse: Claude wrote what I asked, and I reviewed and gave edits (the [API reference](../InductorParserReference.md) and [Error Reporting Architecture](../ErrorArchitecture.md), for example).
+*Documentation*: This happened all along the way. Any of the documents that use the first person "I" were written by me, usually with Claude suggesting edits (the [readme](../readme.md) and this document, for example). All the others were in reverse: Claude wrote what I asked, and I reviewed and gave edits (the [API reference](InductorParserReference.md) and [Error Reporting Architecture](ErrorArchitecture.md), for example).
 
 I treated code and documentation as "I have to sign off on this as if I wrote it", and reviewed it at that level of detail. I had to agree with design decisions, agree with and be able to explain and justify every line of code and documentation, etc. For tests, I still reviewed the code but cared more about "does this test what it is supposed to test" than code quality per se.
 
@@ -47,8 +47,8 @@ What I'll do the same next time:
 - For polish or redesigns that I might not have otherwise done: Doing sweeping changes (in phases) or small changes that affect lots of areas was trivial and done well by Claude and made getting things "just right" a breeze.
 - Using Claude to do supporting projects that I wouldn't have done otherwise helped deliver much higher quality: performance test harness and suites, "app building" using the library
 - Having Claude do ad hoc testing and verification (in addition to the automated tests) found lots of issues: ensuring that all docs are accurate vis-a-vis the code or external claims, ensuring tests actually test what they say they test, reviewing the finished code across all the standard axes: performance, globalization, localization, functional correctness
-- Giving Claude a high level [test architecture](../TestArchitecture.md) (file organization, test harness, etc) and then having it generate coverage as we went covered a lot of ground quickly and caught regressions
-- Let Claude pick places to perf optimize, and use a perf harness (the [JSON benchmarks](../../ExperimentalSrc/BenchMarks/README.md)) to check its work. Claude was very good at estimating what would be slow and doing a fix and showing it improved the system. Not perfect, but very good. Letting it guide the perf optimizations worked well, and having the perf harness to validate the wins was key.
+- Giving Claude a high level [test architecture](TestArchitecture.md) (file organization, test harness, etc) and then having it generate coverage as we went covered a lot of ground quickly and caught regressions
+- Let Claude pick places to perf optimize, and use a perf harness (the [JSON benchmarks](../ExperimentalSrc/BenchMarks/README.md)) to check its work. Claude was very good at estimating what would be slow and doing a fix and showing it improved the system. Not perfect, but very good. Letting it guide the perf optimizations worked well, and having the perf harness to validate the wins was key.
 
 
 What I'll do from the start next time:
@@ -63,7 +63,7 @@ What I'll do from the start next time:
 ### Docs Details
 I spent a lot of time trying to get Claude to write in the best way I know, i.e. *my* style. I had it analyze my writing from my blog and projects and condense it into a style guide for itself and use that as its "voice". I also doggedly added items to claude.md to remove annoying style ticks it still retained. I found that this helped a little, but best was to run a "lint" pass before every commit that checked all of these rules. It almost always found violations.
 
-Here are a few examples to illustrate what was in claude.md:
+The whole thing is in [SystemClaude.md](Archive/SystemClaude.md), a snapshot of the global claude.md as it stood at the end of the project. Here are a few examples to illustrate what is in it:
 
 > Vocabulary: Never use "earn" / "earns" / "earned" / "earning" figuratively in prose or code comments to say a feature or case justifies its existence ("the case where forced earns its place", "the other two operators earn their spot", "earns its keep"). State the justification directly instead ("the case where forced is the right tool", "the other two operators are worth having because hand-enumerating the result goes stale"). The literal sense (earning money) stays. <!-- style-lint-ok: quotes the rule itself -->
 >
@@ -79,8 +79,8 @@ As a person working solo on a project, Claude is a good sounding board. I'd ofte
 
 Once I had the architecture of the app pinned down, Claude was great at suggesting features that I wouldn't have otherwise done, mostly because I wouldn't have thought of them or didn't want to spend the time implementing them. A couple of examples: <!-- style-lint-ok: author's own voice -->
 
-- A broader-than-timeout [budget system](../InductorParserReference.md#catastrophic-backtracking-and-timeouts) was a great idea.
-- The [algorithm for mapping normalized positions to original text](../MappingPositionsAfterNormalization.md) was Claude's, and is a novel idea as far as I can tell. However, it took me iterating with Claude for 2 weeks (!) before I believed that it was provably valid. That document is the result.
+- A broader-than-timeout [budget system](InductorParserReference.md#catastrophic-backtracking-and-timeouts) was a great idea.
+- The [algorithm for mapping normalized positions to original text](MappingPositionsAfterNormalization.md) was Claude's, and is a novel idea as far as I can tell. However, it took me iterating with Claude for 2 weeks (!) before I believed that it was provably valid. That document is the result.
 
 For Claude's more complicated or new-to-me ideas, I found the best way to build trust and prove that algorithms are correct, especially for areas like Unicode that have huge specifications, is to ask Claude to:
 1) give citations that have links and verbatim quotes to support facts it states (e.g. "Unicode allows x when y"). I usually asked it to put the citations in the comments or docs it wrote.
@@ -95,10 +95,10 @@ The check I did on code review was to explain and justify/poke holes in the code
 
 Claude let me compress the exploration and multiple rewrites of the project into a much shorter time. Every new framework or product I've ever worked on needed a few rewrites of the core architecture as we learned more about the nature of the problem and this was no different. Claude made it *really* fast to completely revector an area when it was time. Some examples:
 
-- Try supporting both a Rune based and Grapheme based parser, and then settle on Grapheme ([the design rationale](ExpandRuneSet.md))
+- Try supporting both a Rune based and Grapheme based parser, and then settle on Grapheme ([the design rationale](Archive/ExpandRuneSet.md))
 - Try supporting a bunch of detailed perf improvements and then cut them because of complexity and maintenance overhead
-- Try various different ways of modelling the [TokenSet](../../src/InductorParser/TokenSet.cs) class to make it safe and usable
-- Change Compile to [auto-convert grammar literals](../UnicodeInternalsArchitecture.md#normalization)
+- Try various different ways of modelling the [TokenSet](../src/InductorParser/TokenSet.cs) class to make it safe and usable
+- Change Compile to [auto-convert grammar literals](UnicodeInternalsArchitecture.md#normalization)
 - Was great for fine tuning that would have taken forever and probably not gotten fixed. Things like better error messages or member renames that touched 250 tests.
 
 
@@ -108,7 +108,7 @@ This might be where I got the biggest wins because I didn't (for the most part) 
 
 In my opinion, this project has incredible test coverage. But it was also a TON of work to review, even though I treated the code quality with a lighter bar than the core framework.  Honestly, it's probably the level of testing and work every project should have, but tough to find a human that would be willing to write them all. Especially on an open source project. <!-- style-lint-ok: author's own voice -->
 
-I kept iterating on ad-hoc testing until the current models were finding really "won't fix" bugs consistently. I'd have each of the 6 instances focus on something different. Sometimes a specific file, sometimes a particular area. You can look in the [BugSearchLog](../BugSearchLog/) for Claude's summary of every single one. It was really good at it and almost always found good bugs, some of which prompted rewrites of key areas.
+I kept iterating on ad-hoc testing until the current models were finding really "won't fix" bugs consistently. I'd have each of the 6 instances focus on something different. Sometimes a specific file, sometimes a particular area. You can look in the [BugSearchLog](BugSearchLog/) for Claude's summary of every single one. It was really good at it and almost always found good bugs, some of which prompted rewrites of key areas.
 
 Learning: Even when random numbers are used to pick files to start from, Claude seems to find the same bug on different worktrees when starting from different places in the same codebase. Picking very specific test criteria like "look for threading bugs" helps, saying "find any bug" and giving it different places to look doesn't. It still seems to migrate back to the same place from different directions.
 
@@ -117,9 +117,9 @@ I had Claude exhaustively check docs for broken links and accuracy, add citation
 ### Supporting Projects Details
 In every framework I've been a part of building, we always do extensive app building, performance tuning and stress testing to focus on usability, finding bugs, flushing out the system. For this project I didn't do stress testing, but found Claude to be *spectacular* on the other two:
 
-- Did Claude app building by having it rewrite MIT licensed apps from the Internet using this parser (the ones I kept are in [E2ESamples](../../E2ESamples/))
-- Did Claude performance tuning, by having it reuse an open source performance harness with existing data and tests designed for parser performance testing (the [JSON benchmarks](../../ExperimentalSrc/BenchMarks/README.md))
+- Did Claude app building by having it rewrite MIT licensed apps from the Internet using this parser (the ones I kept are in [E2ESamples](../E2ESamples/))
+- Did Claude performance tuning, by having it reuse an open source performance harness with existing data and tests designed for parser performance testing (the [JSON benchmarks](../ExperimentalSrc/BenchMarks/README.md))
 
-Using Claude to build [custom rules](../InductorParserReference.md#user-defined-rules) (the [LookbehindRule](../../src/InductorParser.ExternalContractTests/LookbehindRule.cs) ported from LPeg is one that stayed) found some great issues with internal methods, etc. It was able to find custom rules that others had written on other parsers that couldn't be written as the API was designed initially.
+Using Claude to build [custom rules](InductorParserReference.md#user-defined-rules) (the [LookbehindRule](../src/InductorParser.ExternalContractTests/LookbehindRule.cs) ported from LPeg is one that stayed) found some great issues with internal methods, etc. It was able to find custom rules that others had written on other parsers that couldn't be written as the API was designed initially.
 
 It was invaluable to get the usability and performance data from this work, and it was just the kind of detailed, tedious work that would make me want to skip it outside of the most important stuff. With Claude I went much deeper on both than I would have otherwise gone.

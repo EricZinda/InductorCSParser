@@ -53,6 +53,7 @@ curated_docs=(
     UnicodeGotchas.md
     UnicodeInternalsArchitecture.md
     MappingPositionsAfterNormalization.md
+    HowIBuiltThis.md
 )
 
 echo "=== Restoring DocFX (local tool) ==="
@@ -62,11 +63,18 @@ echo "=== Staging curated docs into docs/docfx/docs ==="
 # Copy the curated docs flat into docs/docfx/docs so their mutual links (all flat,
 # e.g. [ref](InductorParserReference.md)) keep resolving and DocFX rewrites
 # them to .html. Rewrite parent-relative links (../E2ESamples, ../src, ...)
-# to absolute GitHub blob URLs, since those targets aren't part of the site.
+# and links into the docs/ subfolders that aren't staged (Archive,
+# BugSearchLog, PotentialBugSources) to absolute GitHub blob URLs, since
+# those targets aren't part of the site.
 rm -rf docs/docfx/docs
 mkdir -p docs/docfx/docs
 for doc in "${curated_docs[@]}"; do
-    sed "s#](\.\./#](${blob_base}/#g" "docs/${doc}" > "docs/docfx/docs/${doc}"
+    sed \
+        -e "s#](\.\./#](${blob_base}/#g" \
+        -e "s#](Archive/#](${blob_base}/docs/Archive/#g" \
+        -e "s#](BugSearchLog/#](${blob_base}/docs/BugSearchLog/#g" \
+        -e "s#](PotentialBugSources/#](${blob_base}/docs/PotentialBugSources/#g" \
+        "docs/${doc}" > "docs/docfx/docs/${doc}"
 done
 
 echo "=== Staging the benchmark chart into docs/docfx/images ==="
@@ -93,6 +101,7 @@ echo "=== Generating home page from readme.md ==="
         -e "s#](src/Benchmarks/performance-chart.jpg)#](images/performance-chart.jpg)#g" \
         -e "s#](src/Benchmarks/performance-chart.html)#](images/performance-chart.html)#g" \
         -e "s#](src/#](${blob_base}/src/#g" \
+        -e "s#](LICENSE)#](${blob_base}/LICENSE)#g" \
         readme.md
 } > docs/docfx/index.md
 

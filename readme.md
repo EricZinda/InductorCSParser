@@ -1,6 +1,8 @@
-The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/. It supports and has been tested on .NET 8, 9 and 10, as well as Unity 6000.3.13f1 Standalone IL2CPP. What this means and how to test on other platforms is described in the [Test Architecture Doc](docs/TestArchitecture.md).
+The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/. It supports and has been tested on .NET 8, 9 and 10, as well as Unity 6000.3.13f1 Standalone IL2CPP. What this means and how to test on other platforms is described in the [Test Architecture Doc](docs/TestArchitecture.md). It's released under the [MIT License](LICENSE).
 
-I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. My goal is to design a parser library that is:
+I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. I wrote up [how I built this](docs/HowIBuiltThis.md), if you're curious.
+
+My goal is to design a parser library that is:
 
 - **More Readable than Regex:** The grammars are self-describing and human readable so they can be reasoned about, code reviewed and understood without looking up obscure letters and symbols. 
 - **Designed for World Languages:** From the lexer, to the built-in rules, to normalization, it's designed around Unicode so grammars have a good starting point for world-language text (but it's not in your face if you don't care).

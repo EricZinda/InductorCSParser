@@ -39,6 +39,8 @@
       href: docs/TestArchitecture.md
     - name: Terminology
       href: docs/Terminology.md
+- name: How I Built This
+  href: docs/HowIBuiltThis.md
 # The API entry references the api/ folder's own toc.yml (the categorized
 # sidebar build-docs.sh writes) rather than a page. Referencing the folder is
 # what makes DocFX show that sidebar next to the landing page. A page linked
