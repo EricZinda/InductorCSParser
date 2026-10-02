@@ -20,7 +20,7 @@ If you just want to learn how to use it, follow the primers:
 - [Primer: Security-Related Concerns](docs/Primer4.md)
 - [Tutorial: Peek](docs/tutorial-peek.md)
 
-You can also just point Claude or Codex at it.  I've used both rather interchangeably as tools when writing this parser and they both do a good job at understanding it, fixing bugs, describing how it works and how to use it, and using it directly in other projects.
+You can also just point Claude or Codex at it.  I've used both rather interchangeably as tools [when writing this parser](docs/HowIBuiltThis.md) and they both do a good job at understanding it, fixing bugs, describing how it works and how to use it, and using it directly in other projects.
 
 For more background, read on.
 
@@ -73,7 +73,7 @@ If you write grammars using the Inductor Parser, you get a foundation that suppo
 - Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss corner cases.
 - The parser defaults to normalizing both the input and your rules to the same form (which you can choose) so that you can write rules how you want and they will match the different forms automatically.
 - Characters that can't possibly match the chosen normalized form for the input throw at compile time. They won't silently be ignored.
-- Every Symbol in the parse tree (and every error on the result) exposes its source position in four units: char index, token index, line, and column. These positions index into the original source even if it has been normalized into something else for parsing. Errors give you the single failure point the same way.
+- Every Symbol in the parse tree (and every error on the result) exposes its source position in four units: char index, token index, line, and column. These positions [index into the original source even if it has been normalized](docs/MappingPositionsAfterNormalization.md) into something else for parsing. Errors give you the single failure point the same way.
 
 You can pretend you never heard the phrase "grapheme cluster" and write rules naturally: the guardrails are there by default and give you the right base to start from.
 
