@@ -33,6 +33,10 @@ I acted as (from a Microsoft job title perspective) the Program Manager, Dev Lea
 
 *Documentation*: This happened all along the way. Any of the documents that use the first person "I" were written by me, usually with Claude suggesting edits (the [readme](../readme.md) and this document, for example). All the others were in reverse: Claude wrote what I asked, and I reviewed and gave edits (the [API reference](InductorParserReference.md) and [Error Reporting Architecture](ErrorArchitecture.md), for example).
 
+Here's what those phases look like as commits per day, split by the prefix each commit title uses (features, bug fixes, and docs). The design and implementation work is mostly the blue up front, the bug hunts are the orange from mid-May into July, and the documentation passes are the wall of gray at the end:
+
+![Features, bug fixes and docs commits per day](bugs_features_per_day.png)
+
 I treated code and documentation as "I have to sign off on this as if I wrote it", and reviewed it at that level of detail. I had to agree with design decisions, agree with and be able to explain and justify every line of code and documentation, etc. For tests, I still reviewed the code but cared more about "does this test what it is supposed to test" than code quality per se.
 
 I let Claude write all the commit messages. These I didn't review.

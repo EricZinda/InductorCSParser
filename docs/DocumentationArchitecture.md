@@ -8,7 +8,7 @@ There are three sources of truth, and the site is just those three things stitch
 2. The hand-written markdown in `docs/` (the primers, the reference, the architecture docs).
 3. The `readme.md`.
 
-The engine that stitches them is [DocFX](https://dotnet.github.io/docfx/), a .NET documentation generator. We pin it as a local tool in `.config/dotnet-tools.json`, so anyone who runs `dotnet tool restore` gets the exact same version. Nothing is installed globally.
+The engine that stitches them is [DocFX](https://dotnet.github.io/docfx/), a .NET documentation generator. It's a local tool with its version locked in `docs/docfx/.config/dotnet-tools.json`, so anyone who runs `dotnet tool restore` from `docs/docfx` gets the exact same version. Nothing is installed globally, and nothing docs-related sits at the repo root except `build-docs.sh`.
 
 `build-docs.sh` makes the site. A GitHub Actions workflow deploys it whenever changes land on `master`.
 
