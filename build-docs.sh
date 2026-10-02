@@ -107,18 +107,14 @@ cp src/Benchmarks/performance-chart.html docs/docfx/images/
 echo "=== Generating home page from readme.md ==="
 # Use the readme as the site home so it stays the single source of truth.
 # Prepend an H1 title (the readme opens with a paragraph, no heading of its
-# own). Keep its docs/ links relative (they resolve to docs/docfx/docs above). Point
-# the benchmark chart image and its interactive HTML at the bundled copies in
-# images/ (staged above) so they work without the repo being public, and the
-# other src/ links at GitHub blob URLs so they stay clickable.
+# own). The readme is also the NuGet package's readme, and nuget.org can't
+# resolve relative links, so every link in it is already an absolute URL:
+# docs pages point at the published site, the benchmark chart and its
+# interactive HTML at the site's images/ copies (staged above), and
+# everything else at GitHub. Nothing needs rewriting here.
 {
     printf '# The Inductor Parser\n\n'
-    sed \
-        -e "s#](src/Benchmarks/performance-chart.jpg)#](images/performance-chart.jpg)#g" \
-        -e "s#](src/Benchmarks/performance-chart.html)#](images/performance-chart.html)#g" \
-        -e "s#](src/#](${blob_base}/src/#g" \
-        -e "s#](LICENSE)#](${blob_base}/LICENSE)#g" \
-        readme.md
+    cat readme.md
 } > docs/docfx/index.md
 
 echo "=== Cleaning previous output ==="

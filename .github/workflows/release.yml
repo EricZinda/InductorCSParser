@@ -1,0 +1,133 @@
+# Publishes a release when a version tag is pushed: packs the library,
+# pushes the package to nuget.org, and creates a GitHub Release with the
+# package and a zip of the netstandard2.1 build (the one Unity's IL2CPP
+# backend loads) attached.
+#
+# Cutting a release, from an up-to-date master checkout:
+#   git tag v1.0.$(git rev-list --count HEAD)
+#   git push origin --tags
+# The build number is the commit count (see the ComputeVersionFromGit
+# target in src/InductorParser/InductorParser.csproj), so the tag has to
+# name the version the build computes for that commit. The workflow
+# checks that and fails with the expected tag name if they differ, so
+# the tag, the Release, and the package version can't drift apart.
+# VersionMajor and VersionMinor are bumped by hand in the csproj before
+# tagging when a release calls for it.
+#
+# Publishing uses nuget.org's Trusted Publishing, so there's no
+# long-lived API key to store or rotate. The job asks GitHub for a
+# short-lived OIDC token, the NuGet/login action trades it to nuget.org
+# for a temporary API key (valid one hour, used once), and the push
+# uses that. nuget.org only accepts the trade if a policy on the
+# account names this exact repo and workflow file.
+#
+# Setup (one time):
+#   1. On nuget.org, open your profile menu -> Trusted Publishing and
+#      add a policy with Repository Owner "EricZinda", Repository
+#      "InductorCSParser", Workflow File "release.yml" (file name only),
+#      and no environment.
+#   2. Store the nuget.org profile name (the username, not the email)
+#      as the NUGET_USER repo secret (Settings -> Secrets and variables
+#      -> Actions). The login action needs it to say which account's
+#      policies to check.
+# The GitHub Release uses the workflow's own token and needs no setup.
+#
+# Dry run: running the workflow by hand from the Actions tab (the
+# workflow_dispatch trigger) does everything except the two publishing
+# steps. It packs, zips, and exchanges the OIDC token for a temporary
+# key, which proves the Trusted Publishing policy accepts this repo and
+# workflow, then uploads the package and zip as a workflow artifact to
+# inspect. Nothing reaches nuget.org or the Releases page. Use it before
+# the first real tag, since nuget.org never deletes a published version.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Creating the Release and uploading its assets needs write access to
+# the repo's contents. id-token lets the job request the OIDC token
+# that Trusted Publishing exchanges for a temporary nuget.org key.
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The build number is the commit count, so the full history
+          # has to be present. A shallow checkout would compute 1.
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # 8 covers the net8.0 target, 10 matches the SDK the repo
+          # develops on so "LangVersion latest" compiles the same C#.
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Pack
+        run: dotnet pack -c Release src/InductorParser/InductorParser.csproj -o out
+
+      - name: Read the version the build computed
+        run: |
+          package=$(ls out/InductorParser.*.nupkg)
+          version=${package#out/InductorParser.}
+          version=${version%.nupkg}
+          echo "Packed version ${version}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Check the tag matches the computed version
+        if: github.event_name == 'push'
+        run: |
+          if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match the version this commit builds as, ${VERSION}. Delete the tag and tag this commit v${VERSION} instead." >&2
+            exit 1
+          fi
+
+      - name: Zip the netstandard2.1 build for Unity
+        run: |
+          zip -j "out/InductorParser-${VERSION}-netstandard2.1.zip" \
+            src/InductorParser/bin/Release/netstandard2.1/InductorParser.dll \
+            src/InductorParser/bin/Release/netstandard2.1/InductorParser.xml \
+            LICENSE
+
+      # Requested right before the push because the temporary key only
+      # lives an hour.
+      - name: Get a temporary nuget.org API key through Trusted Publishing
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Upload the package and zip as a workflow artifact (dry run only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: InductorParser-${{ env.VERSION }}
+          path: out/
+
+      - name: Push to nuget.org
+        if: github.event_name == 'push'
+        run: >
+          dotnet nuget push "out/InductorParser.${VERSION}.nupkg"
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+      - name: Create the GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${GITHUB_REF_NAME}"
+          "out/InductorParser.${VERSION}.nupkg"
+          "out/InductorParser-${VERSION}-netstandard2.1.zip"
+          --title "InductorParser ${VERSION}"
+          --generate-notes

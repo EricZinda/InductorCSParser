@@ -17,6 +17,35 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!-- NuGet package metadata. `dotnet pack -c Release` produces
+       InductorParser.<version>.nupkg with both target frameworks and
+       the XML doc file inside. The version comes from the
+       ComputeVersionFromGit target below, same as the DLL's
+       FileVersion, so a package and the DLL inside it always agree.
+       The release workflow (.github/workflows/release.yml) runs the
+       pack and pushes the result to nuget.org when a version tag is
+       pushed. The license and readme are packed in from the repo root
+       so nuget.org can show them on the package page. nuget.org can't
+       resolve relative links, so every link in the readme is an
+       absolute URL (docs pages on the published site, the chart image
+       from the site's images/ folder, everything else on GitHub). -->
+  <PropertyGroup>
+    <PackageId>InductorParser</PackageId>
+    <Authors>Eric Zinda</Authors>
+    <Description>A PEG parser library where grammars are readable rules instead of regex. Designed around Unicode, safe against pathological input by default, and able to run under Unity IL2CPP and WebGL.</Description>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <PackageProjectUrl>https://ericzinda.github.io/InductorCSParser/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/EricZinda/InductorCSParser</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>parser;parsing;grammar;unicode;regex;unity;PEG;C#</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\..\readme.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
   <!-- Unicode implementation default: what
        UnicodeImplementation.Automatic means in this build. One setting
        (UnicodeEnvironment.Implementation) governs the segmenter and
@@ -94,13 +123,13 @@
        compiled against the previous build. FileVersion (what Explorer
        shows in file properties) gets the real Major.Minor.Build.
        InformationalVersion adds the short commit hash on the end
-       (0.9.347+d10a5f3) so the exact commit a DLL came from is
+       (1.0.1059+d745f88) so the exact commit a DLL came from is
        readable from the file alone. When git isn't available (a build
        from a source tarball, for example) the build number falls back
        to 0 and the hash is left off. -->
   <PropertyGroup>
-    <VersionMajor>0</VersionMajor>
-    <VersionMinor>9</VersionMinor>
+    <VersionMajor>1</VersionMajor>
+    <VersionMinor>0</VersionMinor>
     <!-- The SDK appends the full 40-character commit hash to
          InformationalVersion on its own when it detects a git repo,
          which would put the commit in twice. The target below already
@@ -130,6 +159,10 @@
       <InformationalVersion>$(FileVersion)</InformationalVersion>
       <InformationalVersion Condition="'$(GitCommitHashExitCode)' == '0'">$(FileVersion)+$(GitCommitHash)</InformationalVersion>
       <AssemblyVersion>$(VersionMajor).$(VersionMinor).0.0</AssemblyVersion>
+      <!-- The NuGet package takes the same Major.Minor.Build as the
+           DLL. Set here, after the commit count is known, rather than
+           at evaluation time where it would default to 1.0.0. -->
+      <PackageVersion>$(FileVersion)</PackageVersion>
     </PropertyGroup>
   </Target>
 
