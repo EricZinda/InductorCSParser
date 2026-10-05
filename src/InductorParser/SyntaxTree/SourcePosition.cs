@@ -81,9 +81,13 @@ public readonly struct SourcePosition
     /// <summary>
     /// The source string <see cref="CharIndex">SourcePosition.CharIndex</see> is an offset into, always the user's original input
     /// even for parses that normalized under the hood. Never null. A <see cref="InductorParser.SyntaxTree.SourcePosition">SourcePosition</see> built from a null
-    /// input stores the empty string.
+    /// input, and the <c>default(SourcePosition)</c> value, both read as the empty string.
     /// </summary>
-    public string Input { get; }
+    public string Input => _input ?? string.Empty;
+
+    // Null on a default(SourcePosition), which skips the constructor.
+    // The Input getter coalesces so the documented "never null" holds.
+    private readonly string? _input;
 
     /// <summary>
     /// The text of the line this position falls on: from the start of the line up
@@ -108,7 +112,7 @@ public readonly struct SourcePosition
 
     internal SourcePosition(string input, int charIndex, int tokenIndex, int line, int charColumn)
     {
-        Input = input ?? string.Empty;
+        _input = input ?? string.Empty;
         CharIndex = charIndex;
         TokenIndex = tokenIndex;
         Line = line;
