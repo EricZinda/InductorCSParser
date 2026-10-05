@@ -80,4 +80,27 @@ public class SourceRangeTests
         var range = new SourceRange(position, position);
         Assert.That(range.SubstringOfInput(), Is.EqualTo(string.Empty));
     }
+
+    [Test]
+    public void Default_SourcePosition_reads_as_position_zero_of_empty_input()
+    {
+        // A consumer that stores SourcePosition in its own AST node, an
+        // array, or a dictionary holds default(SourcePosition) for any slot
+        // nothing assigned (an uninitialized field, a TryGetValue miss).
+        // Input documents that it is never null, so the default value reads
+        // as position 0 of the empty string and every member works.
+        SourcePosition position = default;
+        Assert.That(position.Input, Is.EqualTo(string.Empty));
+        Assert.That(position.SourceLine(), Is.EqualTo(string.Empty));
+        Assert.That(position.TokenColumn, Is.EqualTo(0));
+        Assert.That(position.TokenColumnNumber, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Default_SourceRange_reads_as_an_empty_span_of_empty_input()
+    {
+        SourceRange range = default;
+        Assert.That(range.SubstringOfInput(), Is.EqualTo(string.Empty));
+        Assert.That(range.SourceLine(), Is.EqualTo(string.Empty));
+    }
 }
