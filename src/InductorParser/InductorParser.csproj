@@ -82,11 +82,12 @@
          and others), so this second IVT is required for the synced
          sources to compile under Unity. See docs/TestArchitecture.md. -->
     <InternalsVisibleTo Include="InductorParser.PlayModeTests" />
-    <!-- The state-machine engine in ExperimentalSrc/ ships as a
-         separate assembly so consumers who don't need it can ship
-         without it. It needs access to internal members on Lexer,
-         Rule, Symbol, and ParseOptions because it's an alternative
-         evaluator, not an external API consumer. -->
+    <!-- The state-machine engine is an alternative evaluator that
+         lives in its own repo and builds as a separate assembly, so
+         consumers who don't need it can ship without it. It needs
+         access to internal members on Lexer, Rule, Symbol, and
+         ParseOptions because it's an alternative evaluator, not an
+         external API consumer. -->
     <InternalsVisibleTo Include="InductorParser.StateMachine" />
     <!-- Tests for the state-machine engine need internal access too:
          EngineSelectionFixture flips the internal
@@ -95,8 +96,9 @@
          the engine. Same rationale as InductorParser.PlayModeTests
          above. -->
     <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
-    <!-- Required-literal prefilter analysis (ExperimentalSrc/InductorParser.Prefilter)
-         introspects rule types from outside the core assembly to derive
+    <!-- Required-literal prefilter analysis (InductorParser.Prefilter,
+         maintained alongside the state-machine engine) introspects
+         rule types from outside the core assembly to derive
          a substring every successful match must contain. Neither parsing
          engine consults it; it exists for the rebar grep benchmark and
          any other caller that wants to pre-filter input before invoking

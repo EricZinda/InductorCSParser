@@ -4,12 +4,11 @@ This is the maintainer's view of the repo: what the build produces, where the ve
 
 # The pieces
 
-There are three solutions, split on purpose so a plain library build never has to restore benchmark or experimental packages.
+There are two solutions, split on purpose so a plain library build never has to restore benchmark packages.
 
 ```
 InductorParser.sln                              the library, its test projects, and the E2ESamples
 src/Benchmarks/Benchmarks.sln                   the JSON benchmark harness (BenchmarkDotNet, Parlot, Pidgin, ...)
-ExperimentalSrc/InductorParser.Experimental.sln the state-machine evaluator and prefilter, not shipped
 ```
 
 The library itself is `src/InductorParser/InductorParser.csproj`. It has no NuGet dependencies and builds two targets:

@@ -55,13 +55,13 @@
     <ProjectReference Include="..\InductorParser.Tests.GlobalizationChild\InductorParser.Tests.GlobalizationChild.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <!-- The state-machine test project in ExperimentalSrc/ shares
-       fixtures from this project (TraceTestHelpers, UnicodeExamples,
-       ChordGrammar, BacklogGrammar) which are internal. Granting it
-       visibility here lets it use those types directly without having
-       to either duplicate them or expose them as public to all
-       consumers of InductorParser.Tests. The grant is harmless when
-       ExperimentalSrc is not present. -->
+  <!-- The state-machine engine's test project, which lives in its own
+       repo, shares fixtures from this project (TraceTestHelpers,
+       UnicodeExamples, ChordGrammar, BacklogGrammar) which are
+       internal. Granting it visibility here lets it use those types
+       directly without having to either duplicate them or expose them
+       as public to all consumers of InductorParser.Tests. The grant is
+       harmless when that project is not present. -->
   <ItemGroup>
     <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
   </ItemGroup>
