@@ -1,7 +1,7 @@
 # How I built this
 I needed a PEG parser for a C# project I'm building so I wanted to port the [C++ parser I had already open sourced](https://github.com/EricZinda/InductorParser) to .NET. Since it was April 2026, I thought this would be a good experiment to understand the capabilities of LLMs as they stood then.
 
-I was part of the leadership team that delivered the .NET Framework 1.0, alongside [Scott Gellock](https://www.linkedin.com/in/sgellock/) and [Destry Hood](https://www.linkedin.com/in/destry-hood-336790112/) and I managed teams that delivered several other framework components afterwards. I have a lot of experience designing, building and shipping this type of product. So, I was excited to go down that same road using an LLM to get a real understanding of their strengths and weaknesses in a domain I understood deeply.
+I was part of the leadership team that delivered the .NET Framework 1.0, alongside [Scott Gellock](https://www.linkedin.com/in/sgellock/), [Destry Hood](https://www.linkedin.com/in/destry-hood-336790112/) and Mark Anders and I managed teams that delivered several other framework components afterwards. I have a lot of experience designing, building and shipping this type of product. So, I was excited to go down that same road using an LLM to get a real understanding of their strengths and weaknesses in a domain I understood deeply.
 
 ## What I did
 At the point where I consider it V1 done, I had worked for ~62 mostly 8ish hour days to produce this. Let's call that 3 months of full-time work. Without Claude, I would have delivered something in that amount of time, I am sure. However, what Claude enabled was a much bigger scope of project than I would have tackled myself in that same time. For example:

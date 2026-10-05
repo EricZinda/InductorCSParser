@@ -1,3 +1,5 @@
+[![NuGet version](https://img.shields.io/nuget/v/InductorParser?label=NuGet)](https://www.nuget.org/packages/InductorParser)
+
 The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser). It's a PEG-style parser, designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/. It supports and has been tested on .NET 8, 9 and 10, as well as Unity 6000.3.13f1 Standalone IL2CPP. What this means and how to test on other platforms is described in the [Test Architecture Doc](https://ericzinda.github.io/InductorCSParser/docs/TestArchitecture.html). It's released under the [MIT License](https://github.com/EricZinda/InductorCSParser/blob/master/LICENSE).
 
 I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. I wrote up [how I built this](https://ericzinda.github.io/InductorCSParser/docs/HowIBuiltThis.html), if you're curious.
