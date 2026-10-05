@@ -4,15 +4,42 @@ using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
-// Direct tests for the public Lexer bulk-scan API
-// (AdvanceWhileRuneIn / AdvanceWhileTokenIn). The in-library caller
-// ScanWhileRule branches on TokenSet.HasMultiRuneGraphemes to pick the
-// right method, so these direct-API tests cover the corner the rule
-// can't reach: a custom Rule subclass that calls AdvanceWhileTokenIn
-// with any set.
+// Direct tests for the Lexer bulk-scan API. AdvanceWhileIn is the public
+// entry point and branches on TokenSet.HasMultiRuneGraphemes between the
+// two internal loops, AdvanceWhileRuneIn and AdvanceWhileTokenIn. The
+// direct tests on the internal loops cover the corner the branch never
+// reaches: AdvanceWhileTokenIn handed a rune-only set.
 [TestFixture]
 public class LexerScanningTests
 {
+    [Test]
+    public void AdvanceWhileIn_consumes_a_run_from_a_rune_only_set()
+    {
+        var lexer = new Lexer("abc123");
+
+        int count = lexer.AdvanceWhileIn(TokenSet.Letters);
+
+        Assert.That(count, Is.EqualTo(3));
+        Assert.That(lexer.Position, Is.EqualTo(3),
+            "The cursor stops on the first token that isn't in the set.");
+    }
+
+    [Test]
+    public void AdvanceWhileIn_consumes_multi_rune_entries_from_a_mixed_set()
+    {
+        // LineTerminators lists CRLF as a two-rune entry, so the combined
+        // set has multi-rune graphemes and AdvanceWhileIn takes the
+        // grapheme-cluster path, where CRLF counts as one token.
+        var set = TokenSet.Runes("a") | TokenSet.LineTerminators;
+        var lexer = new Lexer("a\r\na!");
+
+        int count = lexer.AdvanceWhileIn(set);
+
+        Assert.That(count, Is.EqualTo(3), "a, CRLF, a: three tokens.");
+        Assert.That(lexer.Position, Is.EqualTo(4),
+            "The cursor stops on the '!', four chars in.");
+    }
+
     [Test]
     public void AdvanceWhileTokenIn_consumes_lone_surrogate_a_rune_only_set_covers()
     {

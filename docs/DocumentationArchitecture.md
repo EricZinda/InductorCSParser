@@ -8,7 +8,7 @@ There are three sources of truth, and the site is just those three things stitch
 2. The hand-written markdown in `docs/` (the primers, the reference, the architecture docs).
 3. The `readme.md`.
 
-The engine that stitches them is [DocFX](https://dotnet.github.io/docfx/), a .NET documentation generator. We pin it as a local tool in `.config/dotnet-tools.json`, so anyone who runs `dotnet tool restore` gets the exact same version. Nothing is installed globally.
+The engine that stitches them is [DocFX](https://dotnet.github.io/docfx/), a .NET documentation generator. It's a local tool with its version locked in `docs/docfx/.config/dotnet-tools.json`, so anyone who runs `dotnet tool restore` from `docs/docfx` gets the exact same version. Nothing is installed globally, and nothing docs-related sits at the repo root except `build-docs.sh`.
 
 `build-docs.sh` makes the site. A GitHub Actions workflow deploys it whenever changes land on `master`.
 
@@ -20,7 +20,7 @@ First it gathers the conceptual content. It copies the curated `docs/` markdown 
 
 Then it builds the API reference from your code. `docfx metadata` runs Roslyn over `InductorParser.csproj`, reads every public type and its `///` comments, and writes one YAML file per type into `docs/docfx/api`. This is the "docs from the code" half.
 
-Then there's a small post-processing step that's our own. It takes that generated API data and writes two files: `api/index.md`, the single categorized API page (Building a Grammar, Starting a Parse, and so on), and `api/toc.yml`, the matching grouped sidebar. Both come from one hand-maintained list of categories in the script, and there's a check that every public type lands in some category, so a newly added type can't silently disappear. If one isn't categorized, the build warns and drops it under an "Uncategorized" group rather than leaving it off.
+Then there's a small post-processing step that's our own. It rewrites the generated `api/toc.yml`, the sidebar shown next to every API page, so it groups the public types into task-based sections (Building a Grammar, Starting a Parse, and so on) instead of by namespace. The groups come from one hand-maintained list in the script, and there's a check that every public type lands in some group, so a newly added type can't silently disappear. If one isn't categorized, the build warns and drops it under an "Uncategorized" group rather than leaving it off. There's no separate API index page. The API entry in the top navigation references the `api/` folder (which is what makes DocFX show that sidebar) and lands on the `Rules` class, where a grammar starts.
 
 Finally `docfx build` takes all of it (the conceptual markdown, the readme home page, and the API YAML) and renders one static HTML site into `docs/docfx/_site`. The top navigation (Home / Guides / Reference / Architecture / API) comes from `docs/docfx/toc.yml`, and the whole thing is wired together by `docs/docfx/docfx.json`, which says where the source is, which docs to include, which templates to apply, and settings like turning off the breadcrumb.
 

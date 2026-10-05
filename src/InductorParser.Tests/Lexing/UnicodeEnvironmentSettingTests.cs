@@ -31,7 +31,7 @@ namespace InductorParser.Tests;
 // NonParallelizable because every test in the process shares the one
 // UnicodeEnvironment, and this fixture and HostGlobalizationCheckTests
 // are the two that mutate it (this one sets Implementation, that one
-// sets AcceptHostGlobalization, and both reset it around each test).
+// sets AllowNonstandardRuntimeNormalization, and both reset it around each test).
 // A fixture running at the same time could have the setting frozen
 // out from under this one mid-test (any parse freezes it, so this
 // fixture's next set would throw), could itself resolve to a Bundled
@@ -56,7 +56,7 @@ public class UnicodeEnvironmentSettingTests
 
         // Under dotnet test this always runs on CoreCLR against the
         // net8.0 library build (the highest target the library offers,
-        // consumed by the net10.0 test csproj), where Automatic means
+        // consumed by the CoreCLR test projects), where Automatic means
         // the runtime's StringInfo and string.Normalize. The only
         // other way test sources run (the Unity PlayMode sync) copies
         // Core/, Rules/, and E2EExamples/ plus the root files, never

@@ -244,7 +244,7 @@ public class OrRuleTests
         // match a single token that's outside the NoneOf's set, so the And's
         // true first-token set is "anything in {a,b,c} OR anything not
         // in {x,y}" = anything except {x,y} \ {a,b,c} = anything except
-        // nothing-here = Universe.
+        // nothing-here = ScalarUniverse.
         //
         // The And's published RuleStartRequirements is derived by
         // running Optional through WithAdvance(Sometimes) (because the

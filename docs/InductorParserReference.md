@@ -71,13 +71,13 @@ Compare that side by side with the C++ version from `GettingStarted.md` and you 
 
 The `using static InductorParser.Rules;` at the top is what lets us write `And(...)` and `Or(...)` and `Token('=')` without a class qualifier. It's the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.And(...)`.
 
-Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on every reachable rule) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on the rule's id), but trace output and tree printing will fall back to class-derived labels like `And` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
+Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on every reachable rule) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on the rule's id), but tree printing uses a rune's text for a rule matching one specific rune. Otherwise, it uses a default label like `Token`, `And`, or `OneOrMore`, including for a grapheme made of multiple runes. Trace output also provides default rule labels. These labels don't describe what the rule represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
 
 ## Naming Rules
 
 Most rules don't need a name. `Find(someRule)` takes the rule object you already hold, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree. What `Find` compares under the covers is the `SymbolId` stamped on the rule, not the object reference. For named rules and compiled composites the id is unique to the rule, so it behaves like identity. Anonymous single-rune leaves are the exception: `Token('a')` uses the rune's code point as its id, so two anonymous `Token('a')` rules look like the same rule to `Find`, and an anonymous `OneOf(...)` labels each leaf with whichever rune matched rather than with the rule's own id. Naming a leaf with `.As(...)` gives it a unique id and removes both wrinkles.
 
-Sometimes names do matter though: trace output, tree printing, serialization. Trace output prints rule names to show which rule was tried at each position. `Symbol.DisplayName` labels each node when you print a parse tree. Without an explicit name, these fall back to a class-derived label like `And`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar. Error messages are a separate mechanism entirely: a failed parse reports the `.WithError("...")` text of the deepest rule that failed, or the generic "Unexpected 'x' at line L, column C." default when there isn't one (or "Unexpected end of input at line L, column C." when the failure is at the end). Rule names never appear in error messages, so naming a rule doesn't change what a failed parse reports. See [Primer: Parsing Errors](primerFailure.md) for how error reporting works.
+Sometimes names do matter though: trace output, tree printing, serialization. Trace output prints rule names to show which rule was tried at each position. `Symbol.DisplayName` labels each node when you print a parse tree. If you named the rule with `Rule.As("name")`, that name is returned. Otherwise, a rule for one specific rune uses that rune's text, such as `"a"`. Otherwise, it uses a default label, such as `"Token"` or `"And"`, including for a grapheme made of multiple runes. This is a label for the rule. Use `Symbol.ToString()` to get the text it matched. Error messages are a separate mechanism entirely: a failed parse reports the `.WithError("...")` text of the deepest rule that failed, or the generic "Unexpected 'x' at line L, column C." default when there isn't one (or "Unexpected end of input at line L, column C." when the failure is at the end). Rule names never appear in error messages, so naming a rule doesn't change what a failed parse reports. See [Primer: Parsing Errors](primerFailure.md) for how error reporting works.
 
 Here are different ways you can name rules:
 
@@ -172,7 +172,7 @@ public abstract class Rule
 }
 ```
 
-`rule.NameOf(someId)` consults two sources in order and returns the first match. For rune-range ids (0..0x10FFFF) it renders the code point directly as a single-rune string (`"A"` or `"漢"`). Otherwise it looks the id up in a per-grammar index built lazily on the first `NameOf` call (grammars that never ask never pay for building it), which maps every reachable rule's id to the user's `.As(...)` name (if set) or the rule's class-derived name like `"And"`, `"OneOrMore"`, or `"BetweenInclusive[1..3]"`. Returns null if the id isn't in the grammar.
+If you named the rule with `Rule.As("name")`, that name is returned. Otherwise, a rule for one specific rune uses that rune's text, such as `"a"`. Otherwise, it uses a default label, such as `"Token"` or `"And"`, including for a grapheme made of multiple runes. This is a label for the rule. Use `Symbol.ToString()` to get the text it matched.
 
 The id numbering space is split into three ranges so the kinds of symbol id never collide:
 
@@ -229,27 +229,29 @@ Token("👋🏽")                      // multi-rune grapheme, still one token
 ```csharp
 public readonly struct TokenSet : IEquatable<TokenSet>
 {
-    // Built-in sets
-    public static TokenSet Letters          { get; }  // what char.IsLetter / Rune.IsLetter consider letters
-    public static TokenSet Digits           { get; }  // the characters Unicode classifies as decimal digits
-    public static TokenSet InlineWhitespace { get; }  // whitespace except the UTS #18 line terminators
-    public static readonly TokenSet LineTerminators;  // LF, VT, FF, CR, NEL, LS, PS, plus the two-rune CRLF
+    // Built-in sets. All are properties (never public fields) so their
+    // storage can change without a binary-breaking change for callers.
+    public static TokenSet Letters          { get; }  // Unicode's five Letter categories (Lu, Ll, Lt, Lm, Lo), what char.IsLetter accepts
+    public static TokenSet Digits           { get; }  // Unicode's Decimal_Number (Nd) category, what char.IsDigit accepts
+    public static TokenSet InlineWhitespace { get; }  // TAB plus the Unicode space separators (regex \h), no line terminators
+    public static TokenSet LineTerminators  { get; }  // LF, VT, FF, CR, NEL, LS, PS, plus the two-rune CRLF
     public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace | LineTerminators
     public static TokenSet XidStart         { get; }  // may begin an identifier per UAX #31 (XID_Start)
     public static TokenSet XidContinue      { get; }  // may continue an identifier per UAX #31 (XID_Continue)
-    public static readonly TokenSet Universe;         // every scalar 0..0x10FFFF except surrogates
-    public static readonly TokenSet Replacement;      // U+FFFD REPLACEMENT CHARACTER
+    public static TokenSet ScalarUniverse   { get; }  // every scalar 0..0x10FFFF except surrogates
+    public static TokenSet Surrogates       { get; }  // U+D800..U+DFFF, the only way surrogates enter a set
+    public static TokenSet Replacement      { get; }  // U+FFFD REPLACEMENT CHARACTER
+    public static TokenSet Empty            { get; }  // no members, the same as default(TokenSet)
 
     // ASCII-restricted versions of the built-in sets, for grammars that
     // want only the 0x00..0x7F range
     public static class Ascii
     {
-        public static readonly TokenSet Letters          = Range('A', 'Z') | Range('a', 'z');
-        public static readonly TokenSet Digits           = Range('0', '9');
-        public static readonly TokenSet HexDigits        = Digits | Range('a', 'f') | Range('A', 'F');
-        public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        public static readonly TokenSet AnyWhitespace    = InlineWhitespace
-            | Single('\n') | Single('\v') | Single('\f') | Single('\r') | Graphemes("\r\n");
+        public static TokenSet Letters          { get; }  // Range('A', 'Z') | Range('a', 'z')
+        public static TokenSet Digits           { get; }  // Range('0', '9')
+        public static TokenSet HexDigits        { get; }  // Digits | Range('a', 'f') | Range('A', 'F')
+        public static TokenSet InlineWhitespace { get; }  // Runes(" \t")
+        public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace plus LF, VT, FF, CR, and the two-rune CRLF
     }
 
     // Factories. Single and Range also have Rune and int overloads.
@@ -298,15 +300,15 @@ TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU")
 TokenSet.XidContinue - TokenSet.Runes("_")
 ```
 
-`a - b` keeps `a`'s multi-rune grapheme members (CRLF, a skin-toned emoji) that `b` doesn't contain, so subtracting a rune from a set leaves its clusters alone. For "everything except these categories," subtract from `TokenSet.Universe`, the surrogate-free scalar universe:
+`a - b` keeps `a`'s multi-rune grapheme members (CRLF, a skin-toned emoji) that `b` doesn't contain, so subtracting a rune from a set leaves its clusters alone. For "everything except these categories," subtract from `TokenSet.ScalarUniverse`, the surrogate-free scalar universe:
 
 ```csharp
 // Any printable non-whitespace character: all runes minus the
 // categories you don't want.
-TokenSet.Universe - (TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
+TokenSet.ScalarUniverse - (TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
 ```
 
-One caveat on `Universe`: it holds single scalar values only, never a multi-rune cluster (the set of all clusters is effectively infinite, so a "universe" only makes sense at the scalar level). That means `OneOf(Universe - X)` never matches a multi-rune token like CRLF or a skin-toned emoji, while the rule-level `NoneOf(X)` matches any token that isn't in X, multi-rune included. Pick `NoneOf` when "everything except" needs to cover arbitrary clusters, and `Universe - X` when you want a class you can keep composing with `|`, `&`, and `-`.
+One caveat on `ScalarUniverse`: it holds single scalar values only, never a multi-rune cluster (the set of all clusters is effectively infinite, so a "universe" only makes sense at the scalar level). That means `OneOf(ScalarUniverse - X)` never matches a multi-rune token like CRLF or a skin-toned emoji, while the rule-level `NoneOf(X)` matches any token that isn't in X, multi-rune included. Pick `NoneOf` when "everything except" needs to cover arbitrary clusters, and `ScalarUniverse - X` when you want a class you can keep composing with `|`, `&`, and `-`.
 
 Internally a `TokenSet` is a sorted array of rune ranges plus a sorted array of multi-rune graphemes. Intersection and difference are single linear passes over the sorted arrays, and union re-sorts the combined range list. Compound expressions are evaluated at construction, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it. Membership testing scans the first few ranges linearly and binary-searches the rest, which matters because the built-ins are bigger than they look: `Letters` is about 660 ranges.
 
@@ -503,7 +505,7 @@ public readonly struct ParseResult
     public int  ErrorTokenIndex        { get; }
     public int  ErrorTokenColumn       { get; }
 
-    // The error position packed into a SourcePosition. Null on success.
+    // The error position packed into a SourcePosition. Null on Success or NotRun.
     // Use this when you want all five units in one shot (one walk of the
     // input instead of several lazy ones).
     public SourcePosition? ErrorPosition { get; }
@@ -511,6 +513,7 @@ public readonly struct ParseResult
 
 public enum ParseOutcome
 {
+    NotRun = 0,           // default result; no parse ran
     Success,
     GrammarMismatch,       // rules didn't match the input
     MalformedInput,        // input isn't well-formed UTF-16, the grammar never ran
@@ -527,6 +530,8 @@ The LSP conventions are deliberate. LSP is the protocol VS Code, Neovim, JetBrai
 
 `Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) has the same `CharIndex`, `TokenIndex`, `Line`, `CharColumn`, and `TokenColumn` fields (plus 1-based `LineNumber` / `CharColumnNumber` / `TokenColumnNumber` conveniences for human-facing messages), so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use. And when your own AST needs a span no single Symbol covers (an And node that joins two comparisons, say), the `SourceRange` constructor is public: `new SourceRange(left.Start, right.End)` builds the compound span from the children's endpoints. The only requirement is that both endpoints point into the same input text, which positions from the same parse always do.
 
+`default(ParseResult)` has `Outcome == ParseOutcome.NotRun`, `Success == false`, and no error position or message. A call to `Rule.Parse` always returns a completed outcome, never `NotRun`.
+
 The `Outcome` field distinguishes "the grammar didn't match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or rule-count-limit exhaustion means the input might be valid but we couldn't decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 
 ## The Symbol Tree
@@ -541,8 +546,8 @@ public sealed class Symbol
     public IReadOnlyList<Symbol> Children { get; }
     public bool IsLeaf { get; }                    // true for a leaf with matched text, false for a
                                                    // composite (even one with zero children)
-    public string? DisplayName { get; }            // .As(...) name if set, else the class-derived label,
-                                                   // else the matched rune's own text
+    public string? DisplayName { get; }            // .As(...) name; otherwise the specific rune's text;
+                                                   // otherwise a default label, also for multi-rune graphemes
     public static readonly Symbol Discarded;       // what a Delete rule returns from TryParse to mean
                                                    // "matched successfully, contributes nothing"
 
@@ -552,6 +557,10 @@ public sealed class Symbol
 
     public override string ToString();             // text of the leaves that survived flattening
     public string SourceText { get; }              // verbatim input span this Symbol covers
+    public string PrintTree();                     // indented debug rendering of this subtree, names
+                                                   // resolved through the grammar it was parsed with
+    public string PrintTree(Rule rule);            // same, resolving names through the given grammar
+                                                   // (for a hand-built Symbol with no parse context)
     // Apply the FlattenType pass by hand: Delete nodes dropped, Flatten
     // nodes' children lifted, Preserve nodes kept. For trees parsed with
     // ParseOptions.PreserveAllSymbols; an already-flattened tree passes

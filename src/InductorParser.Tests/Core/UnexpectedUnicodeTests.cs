@@ -503,13 +503,13 @@ public class UnexpectedUnicodeTests
     [Test]
     public void OneOf_universe_rejects_lone_surrogate_under_null_normalization()
     {
-        // Universe is the scalar-value universe (no surrogates), because
+        // ScalarUniverse is the scalar-value universe (no surrogates), because
         // operator ~ complements over scalar values only. Under
         // Compile(null) a lone surrogate token therefore doesn't match
-        // Universe, not because of the membership logic, but because
+        // ScalarUniverse, not because of the membership logic, but because
         // the surrogate isn't in the set. Grammars that want surrogates
         // opt in with `| Surrogates`.
-        var rule = OneOf(TokenSet.Universe);
+        var rule = OneOf(TokenSet.ScalarUniverse);
         rule.Compile(null);
         string input = UnicodeExamples.HighSurrogateMinText;
         var result = rule.Parse(input);

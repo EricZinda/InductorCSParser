@@ -34,7 +34,7 @@ try
         case "default":
             break;
         case "override":
-            UnicodeEnvironment.AcceptHostGlobalization = true;
+            UnicodeEnvironment.AllowNonstandardRuntimeNormalization = true;
             break;
         case "bundled":
             UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled;

@@ -32,17 +32,18 @@ namespace InductorParser.Lexing;
 //     on every Chars access.
 
 /// <summary>
+/// Tokens are created by the <see cref="Lexer"/>. Grammar authors never need to construct them.
 /// One chunk of input the lexer just consumed, or the EOF token at the end
 /// of the input. In the default grapheme mode a token is one Unicode
-/// grapheme (i.e. one UAX #29 grapheme cluster, possibly several runes
-/// wide). In the one-rune-per-token sub-lexer mode (WithinToken) it's one
-/// rune, which can be a fragment of a cluster, and under Compile(null) it
+/// grapheme (i.e. one <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> grapheme cluster, possibly several runes
+/// wide). In the one-rune-per-token sub-lexer mode (<see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see>) it's one
+/// rune, which can be a fragment of a cluster, and under <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null) it
 /// can be a lone surrogate. Rather than copying the matched text into a new
 /// string, a Token keeps a reference to the original input plus an offset and
 /// a length.
 /// </summary>
 /// <remarks>
-/// Not to be confused with the <c>Token</c> factory in
+/// Not to be confused with the <see cref="InductorParser.Rules.Token(char)">Rules.Token</see> factory in
 /// <see cref="InductorParser.Rules"/>, which constructs a rule that matches
 /// one Token from the input. 
 /// </remarks>
@@ -52,7 +53,7 @@ public readonly ref struct Token
     /// other token from the same parse.</summary>
     public string Source { get; }
 
-    /// <summary>Index into <see cref="Source"/> where this token's text
+    /// <summary>Index into <see cref="Source">Token.Source</see> where this token's text
     /// begins.</summary>
     public int Offset { get; }
 
@@ -61,12 +62,12 @@ public readonly ref struct Token
     public int Length { get; }
 
     /// <summary>True for the token the lexer returns at
-    /// end-of-input. That token has an empty <see cref="Chars"/> and a
-    /// <see cref="RuneValue"/> of -1.</summary>
+    /// end-of-input. That token has an empty <see cref="Chars">Token.Chars</see> and a
+    /// <see cref="RuneValue">Token.RuneValue</see> of -1.</summary>
     public bool IsEof { get; }
 
     /// <summary>
-    /// A span over <see cref="Source"/> covering this token's text, without
+    /// A span over <see cref="Source">Token.Source</see> covering this token's text, without
     /// allocating. Empty for the end-of-input token.
     /// </summary>
     /// <remarks>
@@ -78,7 +79,7 @@ public readonly ref struct Token
 
     /// <summary>
     /// A <see cref="ReadOnlyMemory{T}"/> over this token's text. Unlike
-    /// <see cref="Chars"/>, Memory is heap-safe: it can be stored on a class,
+    /// <see cref="Chars">Token.Chars</see>, Memory is heap-safe: it can be stored on a class,
     /// in a dictionary, or across an await, where a span can't go. Empty for
     /// the end-of-input token.
     /// </summary>
@@ -98,7 +99,7 @@ public readonly ref struct Token
     /// to special-case the multi-rune path.
     /// </summary>
     /// <remarks>
-    /// Returned as int rather than System.Text.Rune because -1 is the "no
+    /// Returned as int rather than <see cref="System.Text.Rune">System.Text.Rune</see> because -1 is the "no
     /// single rune here" marker, and Rune has no invalid state.
     /// </remarks>
     public int RuneValue
@@ -120,6 +121,8 @@ public readonly ref struct Token
     }
 
     /// <summary>
+    /// Grammar authors never need to call this constructor. Tokens come from
+    /// <see cref="Lexer.Read">Lexer.Read()</see>.
     /// Creates a token spanning <paramref name="length"/> chars of
     /// <paramref name="source"/> starting at <paramref name="offset"/>. When
     /// <paramref name="isEof"/> is true the token is the flag-only

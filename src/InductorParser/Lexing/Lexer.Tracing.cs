@@ -22,7 +22,7 @@ public sealed partial class Lexer
     /// </summary>
     /// <remarks>
     /// A rule that wants to emit a trace line should call the protected
-    /// TraceSuccess / TraceFailure helpers on <see cref="Rule"/> instead. Those
+    /// <see cref="InductorParser.Rule.TraceSuccess(InductorParser.Lexing.Lexer,InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceSuccess</see> / TraceFailure helpers on <see cref="Rule"/> instead. Those
     /// already cost nothing when the level is gated out. Check this overload
     /// only to skip expensive work that builds the arguments for such a message
     /// at <paramref name="level"/>, which the helpers can't gate for you.
@@ -36,8 +36,8 @@ public sealed partial class Lexer
     /// <remarks>
     /// Use this when behavior should change because someone is watching the
     /// parse (turning off an optimization that would create gaps in the trace,
-    /// for example), as opposed to <see cref="IsTracing(TraceLevel)"/>, which
-    /// asks whether to emit a line at a specific verbosity.
+    /// for example), as opposed to <see cref="IsTracing(TraceLevel)">Lexer.IsTracing(TraceLevel)</see>, which
+    /// reports whether a line at a specific verbosity would be emitted.
     /// </remarks>
     public bool IsTracing() => _traceSink != null;
 

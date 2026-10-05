@@ -42,7 +42,7 @@ public class ParseResultNamingTests
     }
 
     [Test]
-    public void PrintTree_on_result_matches_extension_output()
+    public void PrintTree_on_result_matches_symbol_output()
     {
         var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hi");

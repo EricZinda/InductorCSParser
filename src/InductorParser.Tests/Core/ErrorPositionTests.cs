@@ -256,29 +256,28 @@ public class ErrorPositionTests
     }
 
     [Test]
-    public void Default_struct_does_not_report_success()
+    public void Default_struct_reports_NotRun_without_success_or_an_error()
     {
-        // ParseOutcome.Success is the enum's zero value, so a zeroed
-        // ParseResult has Outcome == Success even though no parse produced
-        // it. Without the _grammar check in ParseResult.Success, a default
-        // struct would claim success while holding a null Tree and empty
-        // Symbols, so the idiomatic `if (result.Success) Use(result.Tree)`
-        // would treat a never-run parse as a successful one and then NRE on
-        // Tree (or silently process empty data). These are the everyday ways
-        // a default ParseResult shows up: a value never assigned, an array
-        // element, a LINQ default, a dictionary miss.
-        Assert.That(default(ParseResult).Success, Is.False,
-            "a default-constructed ParseResult must not report success");
-        Assert.That((new ParseResult[1])[0].Success, Is.False,
-            "an uninitialized ParseResult array element must not report success");
-        Assert.That(new System.Collections.Generic.List<ParseResult>().FirstOrDefault().Success, Is.False,
-            "FirstOrDefault() on an empty List<ParseResult> must not report success");
-
-        // The companion fields stay consistent with "not a success": no
-        // tree, no symbols, empty rendered text.
-        Assert.That(default(ParseResult).Tree, Is.Null);
-        Assert.That(default(ParseResult).Symbols, Is.Empty);
-        Assert.That(default(ParseResult).ToString(), Is.EqualTo(string.Empty));
+        // Unassigned values, array elements, and LINQ defaults all mean no parse ran.
+        var results = new[]
+        {
+            default(ParseResult),
+            new ParseResult(),
+            (new ParseResult[1])[0],
+            new System.Collections.Generic.List<ParseResult>().FirstOrDefault()
+        };
+        Assert.That(default(ParseOutcome), Is.EqualTo(ParseOutcome.NotRun));
+        foreach (var result in results)
+        {
+            Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.NotRun));
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.ErrorPosition, Is.Null);
+            Assert.That(result.ErrorMessage, Is.Empty);
+            Assert.That(result.Tree, Is.Null);
+            Assert.That(result.Symbols, Is.Empty);
+            Assert.That(result.ToString(), Is.Empty);
+            Assert.That(result.ToDebugString(), Is.EqualTo("NotRun"));
+        }
     }
 
     // Char(codepoint) returns a string holding one Unicode scalar value

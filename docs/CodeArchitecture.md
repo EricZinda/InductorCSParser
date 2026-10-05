@@ -2,7 +2,7 @@
 
 ## Why Port
 
-The Inductor Parser started life as a C++ template library written for Exospecies. It runs on Windows, macOS, and iOS and has been in production for years. The goal now is to get the same parser running inside a Unity game, including on WebGL, without losing what made the original nice to use: a small, readable, debuggable PEG parser where grammar rules read like the thing you're trying to parse.
+The Inductor Parser started life as a [C++ template library](https://github.com/EricZinda/InductorParser) written for Exospecies. It runs on Windows, macOS, and iOS and has been in production for years. The goal now is to get the same parser running inside a Unity game, including on WebGL, without losing what made the original nice to use: a small, readable, debuggable PEG parser where grammar rules read like the thing you're trying to parse.
 
 Unity can host C++ as a native plugin on some targets, but not on WebGL (which compiles through Emscripten and has no native plugin story worth relying on) and not cleanly on iOS (where you'd be fighting the build system, App Store rules, and the IL2CPP linker). The path that actually works across every Unity target is to rewrite the parser in C# and ship it as a managed DLL.
 
@@ -28,7 +28,7 @@ The library targets `netstandard2.1`: Unity's scripting runtime exposes .NET Sta
 
 This is the single most important rule and it colors a lot of the smaller decisions. For example, .NET Standard 2.1 has `ReadOnlySpan<T>` and `Memory<T>`, so the lexer can work over spans instead of copying substrings around. It doesn't have `System.Text.Json` source generators, `[RequiresAssemblyFiles]`, C# 11 `required` members, or any of the .NET 7+ numeric abstractions. If a feature sounds new, assume it isn't available and check before using it.
 
-Test projects are different: `InductorParser.Tests` can target `net10.0` because it only runs under `dotnet test` and is never loaded by Unity. So, the library is `netstandard2.1` (plus a `net8.0` target for modern runtimes) and the tests are `net10.0`.
+Test projects are different: they target both `net8.0` and `net10.0` because they run under `dotnet test` and are never loaded by Unity. So, the library is `netstandard2.1` (plus a `net8.0` target for modern runtimes), while the same test suite runs on both supported CoreCLR versions.
 
 ## What the Port Can't Do
 
@@ -58,9 +58,9 @@ Preserve the error reporting heuristic. The "deepest failure wins" heuristic is 
 src/
   InductorParser/                          # netstandard2.1 class library (no Unity)
     InductorParser.csproj                  #   lexer, parser rules, syntax tree, tracing
-  InductorParser.Tests/                    # net10.0, dotnet test only
+  InductorParser.Tests/                    # net8.0 + net10.0, dotnet test only
     InductorParser.Tests.csproj
-  InductorParser.ExternalContractTests/    # net10.0, dotnet test only
+  InductorParser.ExternalContractTests/    # net8.0 + net10.0, dotnet test only
     InductorParser.ExternalContractTests.csproj
   Benchmarks/                              # net10.0 BenchmarkDotNet console app
     Benchmarks.csproj

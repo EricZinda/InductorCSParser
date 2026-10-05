@@ -82,8 +82,9 @@ E2ESamples/BibTeX/
     BibTexTests.cs                   side-by-side small cases + Unicode + error positions
     XamplCorpusTests.cs              both parsers vs. xampl.bib, the canonical corpus
     Fixtures/
-      xampl.bib                      Oren Patashnik's standard test file (public domain),
-                                     bundled with every TeX distribution since 1985
+      xampl.bib                      Oren Patashnik's standard test file (copyrighted,
+                                     redistributable unmodified under its own notice),
+                                     shipped with every TeX distribution since 1985
 ```
 
 ## Line counts (non-comment, non-blank)

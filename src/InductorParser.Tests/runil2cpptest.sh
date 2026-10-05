@@ -9,18 +9,23 @@
 #
 # Usage:
 #   ./runil2cpptest.sh
+#   UNITY_VERSION=6000.3.13f1 ./runil2cpptest.sh
+#   UNITY_EDITOR=/path/to/Unity ./runil2cpptest.sh
 #
 # On Windows this runs from Git Bash or WSL, same as test.sh.
 #
 # Requires:
 #   - dotnet SDK
-#   - Unity 6000.3.13f1 (matches Unity/ProjectSettings/ProjectVersion.txt)
+#   - Unity 6000.3.13f1 by default (matches ProjectVersion.txt), or an
+#     editor selected with UNITY_VERSION / UNITY_EDITOR
 #   - Unity's IL2CPP build support module for the host platform
 #   - Unity not open on the Unity/ project at the same time
 #
 # Results land in test-results/il2cpp-playmode-results.xml at the repo
-# root; Unity log lands in test-results/il2cpp-log.txt. Exits non-zero on
-# test failure or if a required component is missing.
+# root and the Unity log in test-results/il2cpp-log.txt. Unity runs
+# against a temporary copy of the project, also under test-results/,
+# that is deleted when the script exits. Exits non-zero on test failure
+# or if a required component is missing.
 
 set -e
 
@@ -33,7 +38,8 @@ RESULTS_XML="$RESULTS_DIR/il2cpp-playmode-results.xml"
 UNITY_LOG="$RESULTS_DIR/il2cpp-log.txt"
 SYNCED_TESTS_DIR="$UNITY_PROJECT/Assets/Tests/PlayMode/Synced"
 
-UNITY_VERSION="6000.3.13f1"
+DEFAULT_UNITY_VERSION="6000.3.13f1"
+UNITY_VERSION="${UNITY_VERSION:-$DEFAULT_UNITY_VERSION}"
 
 fail() {
     echo ""
@@ -73,21 +79,22 @@ to_windows_path() {
     fi
 }
 
-UNITY=""
+UNITY="${UNITY_EDITOR:-}"
 UNITY_DATA=""
-for drive_root in "/c" "/mnt/c"; do
-    candidate="$drive_root/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe"
-    if [ -x "$candidate" ]; then
-        UNITY="$candidate"
-        UNITY_DATA="$drive_root/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Data"
-        IL2CPP_VARIATION="WindowsStandaloneSupport/Variations/win64_player_nondevelopment_il2cpp"
-        break
-    fi
-done
+if [ -n "$UNITY" ] && [ ! -x "$UNITY" ]; then
+    fail "UNITY_EDITOR is not executable" "Path: $UNITY"
+fi
+if [ -z "$UNITY" ]; then
+    for drive_root in "/c" "/mnt/c"; do
+        candidate="$drive_root/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe"
+        if [ -x "$candidate" ]; then
+            UNITY="$candidate"
+            break
+        fi
+    done
+fi
 if [ -z "$UNITY" ] && [ -x "/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity" ]; then
     UNITY="/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity"
-    UNITY_DATA="/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents"
-    IL2CPP_VARIATION="PlaybackEngines/MacStandaloneSupport/Variations/macos_x64_nondevelopment_il2cpp"
 fi
 if [ -z "$UNITY" ]; then
     fail "Unity $UNITY_VERSION not found" \
@@ -97,6 +104,21 @@ if [ -z "$UNITY" ]; then
         "  /mnt/c/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe (WSL)" \
         "  /Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity (macOS)"
 fi
+
+case "$UNITY" in
+    *.exe)
+        UNITY_DATA="$(dirname "$UNITY")/Data"
+        IL2CPP_VARIATION="WindowsStandaloneSupport/Variations/win64_player_nondevelopment_il2cpp"
+        ;;
+    */Unity.app/Contents/MacOS/Unity)
+        UNITY_DATA="$(dirname "$(dirname "$UNITY")")"
+        IL2CPP_VARIATION="MacStandaloneSupport/Variations/macos_x64_nondevelopment_il2cpp"
+        ;;
+    *)
+        UNITY_DATA="$(dirname "$UNITY")/Data"
+        IL2CPP_VARIATION="LinuxStandaloneSupport/Variations/linux64_player_nondevelopment_il2cpp"
+        ;;
+esac
 
 # --- IL2CPP build support module ---
 #
@@ -122,8 +144,10 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 rm -f "$RESULTS_XML" "$UNITY_LOG"
-# wslpath -w can only convert paths that exist, and the log file is
-# handed to Unity in Windows form below, so create it empty up front.
+# The log file is handed to Unity in Windows form below, and wslpath -w
+# has been seen to refuse a path that doesn't exist yet, so create it
+# empty up front. (Current WSL builds convert missing paths fine, so this
+# is cheap insurance rather than a hard requirement.)
 touch "$UNITY_LOG"
 
 echo "=== Building netstandard2.1 InductorParser.dll ==="
@@ -146,9 +170,34 @@ echo ""
 echo "=== Syncing test sources into Unity PlayMode ==="
 "$SCRIPT_DIR/syncteststounity.sh"
 
+# Run Unity against a disposable copy. Opening a project in another Unity
+# version can rewrite ProjectSettings, package locks, and imported metadata.
+# None of those exploratory changes should touch the working tree.
+#
+# The copy lives under test-results/ (gitignored), not in the shell's
+# temp directory. Under WSL, /tmp is on the Linux filesystem and reaches
+# Windows Unity as a \\wsl.localhost\... network path, which Unity doesn't
+# support as a project location. The repo itself already has to be
+# somewhere the Unity executable can open, so a copy next to the results
+# is reachable from whichever shell started the script.
+TEMP_UNITY_ROOT="$(mktemp -d "$RESULTS_DIR/unity-project.XXXXXX")"
+RUN_UNITY_PROJECT="$TEMP_UNITY_ROOT/Unity"
+cleanup_unity_copy() {
+    if [ -n "${TEMP_UNITY_ROOT:-}" ] && [ -d "$TEMP_UNITY_ROOT" ] && [ "$TEMP_UNITY_ROOT" != "/" ]; then
+        rm -rf -- "$TEMP_UNITY_ROOT"
+    fi
+}
+trap cleanup_unity_copy EXIT
+mkdir -p "$RUN_UNITY_PROJECT"
+cp -R "$UNITY_PROJECT/Assets" "$RUN_UNITY_PROJECT/"
+cp -R "$UNITY_PROJECT/Packages" "$RUN_UNITY_PROJECT/"
+cp -R "$UNITY_PROJECT/ProjectSettings" "$RUN_UNITY_PROJECT/"
+cp -R "$UNITY_PROJECT/E2EExamples" "$RUN_UNITY_PROJECT/"
+
 echo ""
 echo "=== Running PlayMode smoke test under IL2CPP (Unity batch mode) ==="
 echo "Unity:   $UNITY"
+echo "Project: $RUN_UNITY_PROJECT (temporary copy)"
 echo "Log:     $UNITY_LOG"
 echo "Results: $RESULTS_XML"
 echo "(This can take several minutes on a cold Library/ cache.)"
@@ -156,8 +205,9 @@ echo "(This can take several minutes on a cold Library/ cache.)"
 # No -quit: the editor script schedules an async test run and calls
 # EditorApplication.Exit from the RunFinished callback.
 "$UNITY" -batchmode -nographics \
-    -projectPath "$(to_windows_path "$UNITY_PROJECT")" \
+    -projectPath "$(to_windows_path "$RUN_UNITY_PROJECT")" \
     -executeMethod InductorParser.Editor.IL2CPPTestRunner.Run \
+    -inductorResultsPath "$(to_windows_path "$RESULTS_XML")" \
     -logFile "$(to_windows_path "$UNITY_LOG")" || UNITY_EXIT=$?
 
 UNITY_EXIT=${UNITY_EXIT:-0}

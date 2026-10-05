@@ -13,3 +13,14 @@ docs/UnicodeGotchas.md
 docs/UnicodeInternalsArchitecure.md
 docs/CodeArchitecture.md
 docs/ErrorArchitecture.md
+docs/MappingPositionsAfterNormalization.md
+docs/TestArchitecture.md
+docs/Terminology.md
+
+Reference:
+    Building a Grammar
+    Starting a Parse
+    Parse Results
+    Writing a Rule
+
+Fixes:

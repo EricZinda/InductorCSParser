@@ -5,8 +5,8 @@ using NUnit.Framework;
 namespace InductorParser.Tests;
 
 // Tests for the public GraphemeHelpers surface. These three methods are
-// what user-defined rules use to ask
-// segmentation questions, so their edge behavior is public API.
+// what user-defined rules call for segmentation, so their edge behavior
+// is public API.
 [TestFixture]
 public class GraphemeHelpersTests
 {

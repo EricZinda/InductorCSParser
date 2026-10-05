@@ -10,15 +10,16 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 /// <summary>
-/// A set of tokens, used to describe character classes for OneOf and NoneOf.
+/// A set of tokens, used to describe character classes for
+/// <see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see> and <see cref="Rules.NoneOf(TokenSet)">Rules.NoneOf</see>.
 /// A token is either a single Unicode scalar value (rune) or a multi-rune
 /// grapheme cluster (skin-toned emoji, a joined family emoji, regional-indicator pair,
 /// base+combining-mark grapheme).
 /// </summary>
 /// <remarks>
-/// Build one with the factory methods on this class (e.g. <see cref="Single(int)"/>,
-/// <see cref="Range(int, int)"/>) or one of the built-ins (<see cref="Letters"/>,
-/// <see cref="Digits"/>),
+/// Build one with the factory methods on this class (e.g. <see cref="Single(int)">TokenSet.Single(int)</see>,
+/// <see cref="Range(int, int)">TokenSet.Range(int, int)</see>) or one of the built-ins (<see cref="Letters">TokenSet.Letters</see>,
+/// <see cref="Digits">TokenSet.Digits</see>),
 /// then compose larger classes with the set operators:
 /// <code>
 ///     |   union           a | b           tokens in a or b
@@ -27,13 +28,12 @@ namespace InductorParser;
 /// </code>
 /// The operators return a new TokenSet. The struct is immutable.
 /// <code>
-///     var unicodeIdentifier = TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_");
 ///     var asciiConsonants   = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
 ///     var cyrillicLetters   = TokenSet.Letters &amp; TokenSet.Range(0x0400, 0x04FF);
 ///     var emojiOrLetters    = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
 /// </code>
 /// <para>
-/// Internally a TokenSet keeps two pieces. _ranges is a sorted, non-overlapping,
+/// Internally a <see cref="InductorParser.TokenSet">TokenSet</see> keeps two pieces. _ranges is a sorted, non-overlapping,
 /// non-adjacent array of code-point runs that holds every single-rune member.
 /// _multiRuneGraphemes is a sorted ordinal, deduped array of grapheme strings
 /// that holds every member that occupies two or more runes. Single-rune
@@ -121,20 +121,20 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <summary>
     /// Read-only view of the multi-rune grapheme entries, sorted ordinal.
     /// Empty when the set has no multi-rune content. Returns a
-    /// <c>ReadOnlySpan</c> so callers get foreach and indexing without
+    /// <see cref="System.ReadOnlySpan{T}">ReadOnlySpan</see> so callers get foreach and indexing without
     /// allocation. For the iterator shape that composes with LINQ and
     /// can cross yield boundaries, use
-    /// <see cref="EnumerateMultiRuneGraphemes"/> instead.
+    /// <see cref="EnumerateMultiRuneGraphemes">TokenSet.EnumerateMultiRuneGraphemes()</see> instead.
     /// </summary>
     public ReadOnlySpan<string> MultiRuneGraphemes =>
         _multiRuneGraphemes ?? Array.Empty<string>();
 
     /// <summary>
-    /// Iterator-shaped companion to <see cref="MultiRuneGraphemes"/>.
+    /// Iterator-shaped companion to <see cref="MultiRuneGraphemes">TokenSet.MultiRuneGraphemes</see>.
     /// Yields the same entries in the same order, but as
-    /// <c>IEnumerable&lt;string&gt;</c> so LINQ operators apply and the
+    /// <see cref="System.Collections.Generic.IEnumerable{T}">IEnumerable&lt;string&gt;</see> so LINQ operators apply and the
     /// values can flow through a yield-returning method. The
-    /// <c>ReadOnlySpan</c> property is faster (no enumerator, supports
+    /// <see cref="System.ReadOnlySpan{T}">ReadOnlySpan</see> property is faster (no enumerator, supports
     /// indexing) and should be preferred when the caller doesn't need
     /// either of those features.
     /// </summary>
@@ -165,7 +165,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <summary>
     /// True when <paramref name="codepoint"/> is a single-rune member of this
     /// set. Multi-rune grapheme members are matched by
-    /// <see cref="ContainsToken(string)"/>, not this.
+    /// <see cref="ContainsToken(string)">TokenSet.ContainsToken(string)</see>, not this.
     /// </summary>
     public bool ContainsRune(int codepoint)
     {
@@ -210,16 +210,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return false;
     }
 
-    /// <summary><see cref="ContainsRune(int)"/> for a <see cref="char"/>.</summary>
+    /// <summary><see cref="ContainsRune(int)">TokenSet.ContainsRune(int)</see> for a <see cref="char"/>.</summary>
     public bool ContainsRune(char c) => ContainsRune((int)c);
 
-    /// <summary><see cref="ContainsRune(int)"/> for a <see cref="Rune"/>.</summary>
+    /// <summary><see cref="ContainsRune(int)">TokenSet.ContainsRune(int)</see> for a <see cref="Rune"/>.</summary>
     public bool ContainsRune(Rune r) => ContainsRune(r.Value);
 
     /// <summary>
     /// True when <paramref name="grapheme"/> (one whole token, rune or
     /// multi-rune grapheme) is a member of this set. See
-    /// <see cref="ContainsToken(ReadOnlySpan{char})"/> for the matching rules.
+    /// <see cref="ContainsToken(ReadOnlySpan{char})">TokenSet.ContainsToken(ReadOnlySpan&lt;char&gt;)</see> for the matching rules.
     /// </summary>
     public bool ContainsToken(string grapheme)
     {
@@ -256,12 +256,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <summary>
     /// Enumerate every rune (Unicode scalar value) in this set's
     /// single-rune entries. Cost is O(total range size). For big sets like
-    /// <see cref="Letters"/> that's ~130K iterations. Skips the surrogate
+    /// <see cref="Letters">TokenSet.Letters</see> that's ~130K iterations. Skips the surrogate
     /// gap (U+D800..U+DFFF) since surrogates aren't Unicode scalar values.
-    /// Call <see cref="EnumerateSurrogates"/> for those. A rule that wants
+    /// Call <see cref="EnumerateSurrogates">TokenSet.EnumerateSurrogates()</see> for those. A rule that wants
     /// to walk every member of a set needs to iterate all three of
-    /// <see cref="EnumerateRunes"/>, <see cref="EnumerateSurrogates"/>, and
-    /// <see cref="EnumerateMultiRuneGraphemes"/>.
+    /// <see cref="EnumerateRunes">TokenSet.EnumerateRunes()</see>, <see cref="EnumerateSurrogates">TokenSet.EnumerateSurrogates()</see>, and
+    /// <see cref="EnumerateMultiRuneGraphemes">TokenSet.EnumerateMultiRuneGraphemes()</see>.
     /// </summary>
     public IEnumerable<int> EnumerateRunes()
     {
@@ -282,12 +282,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// <summary>
     /// Enumerate every surrogate code unit (U+D800..U+DFFF) in this set's
     /// single-rune entries. Surrogates aren't Unicode scalar values, so
-    /// they're excluded from <see cref="EnumerateRunes"/>. This is the
+    /// they're excluded from <see cref="EnumerateRunes">TokenSet.EnumerateRunes()</see>. This is the
     /// companion accessor for rules that want to walk them anyway. Empty
     /// for sets with no surrogate entries (the common case, including
-    /// every built-in (<see cref="Letters"/>, <see cref="XidStart"/>, etc.)
+    /// every built-in (<see cref="Letters">TokenSet.Letters</see>, <see cref="XidStart">TokenSet.XidStart</see>, etc.)
     /// since the spec subtracts the surrogate gap). Populated by
-    /// <see cref="SurrogateRange(int, int)"/>.
+    /// <see cref="SurrogateRange(int, int)">TokenSet.SurrogateRange(int, int)</see>.
     /// </summary>
     public IEnumerable<int> EnumerateSurrogates()
     {
@@ -306,36 +306,40 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     /// <summary>
-    /// Form-project this set: every entry E becomes Normalize(E, form), so the
+    /// Normalize every entry of this set to <paramref name="form"/>, so the
     /// set's entries are in the same form the lexer produces on match-time
-    /// input. Under FormC the lexer emits FormC-normalized text, so the set
-    /// must contain entries in that form. Used by OneOfRule / NoneOfRule's
-    /// Compile-time pipeline.
+    /// input. For example, under FormC the lexer emits FormC-normalized text,
+    /// so the set must contain entries in that form. Used by OneOfRule /
+    /// NoneOfRule's <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>-time pipeline.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Ensures that every entry is exactly one grapheme. If an
-    /// entry's projection is multi-grapheme (a compatibility conversion like the
+    /// entry's normalized form is multi-grapheme (a compatibility conversion like the
     /// single grapheme fi-ligature to the two characters "fi" under FormKC), the entry is excluded from the result
     /// and recorded in <paramref name="multiGraphemeConversions"/> for the
     /// caller to surface as an offender. OneOfRule / NoneOfRule match one
     /// grapheme per token, so a multi-grapheme entry can never match in
     /// isolation, and dropping it with a reported offender gives the user a
-    /// clear Compile-time error.
+    /// clear <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>-time error.
     /// </para>
     /// <para>
     /// Surrogate runes (U+D800..U+DFFF) pass through unchanged: they aren't
-    /// runes (string.Normalize throws on them), and a normalized Compile won't
+    /// runes (<see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> throws on them), and a normalized <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> won't
     /// see them in input, so leaving them in is harmless and preserves the
-    /// unnormalized-Compile semantics some grammars rely on.
+    /// unnormalized-<see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> semantics some grammars rely on.
     /// </para>
     /// <para>
-    /// Entries whose Normalize call throws ArgumentException (the runtime's way
-    /// of saying "I won't normalize this") are dropped silently. The exact set
-    /// of rejected code points varies by runtime (Windows and Linux disagree),
-    /// so they aren't cataloged here. Input the lexer produces goes
-    /// through the same Normalize call and would hit the same rejection, so a
-    /// dropped entry can't match anything the rule would otherwise have seen.
+    /// An entry the active normalizer refuses is dropped. Surrogate runes
+    /// never reach this point (they pass through, above), so in practice that
+    /// means U+FFFE, the one well-formed scalar .NET's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>
+    /// rejects. The built-in normalizer refuses it too, on purpose (see
+    /// UnicodeNormalization.FindFirstUnnormalizableIndex), so this is the same
+    /// on every runtime. The drop is harmless: a normalizing Parse reports
+    /// input containing U+FFFE as MalformedInput before any rule runs, so a
+    /// <see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see> could never have matched that entry anyway. Even a runtime whose
+    /// normalizer accepts U+FFFE ends up in the same place, since that
+    /// Parse-time scan rejects the input regardless.
     /// </para>
     /// </remarks>
     public TokenSet NormalizedFor(NormalizationForm form, List<(string original, string normalized)>? multiGraphemeConversions = null)
@@ -496,25 +500,42 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// Returns a copy of this set with every entry that isn't already in
-    /// <paramref name="form"/> projected through <c>Normalize(form)</c>. An
-    /// entry whose conversion is a single
-    /// rune is replaced by that rune. An entry whose conversion is a single
-    /// grapheme spanning several runes (e.g. "e + combining acute" under
-    /// FormD) is added as a multi-rune grapheme member. An entry whose
-    /// conversion is multiple graphemes (e.g. the single grapheme fi-ligature under FormKC
-    /// becomes the two members 'f' and 'i') is split into one member per
-    /// grapheme. Entries already in <paramref name="form"/> pass through
-    /// unchanged.
+    /// <paramref name="form"/> normalized to it. An entry whose normalized
+    /// form is a single rune is replaced by that rune. An entry whose
+    /// normalized form is a single grapheme spanning several runes (e.g.
+    /// "e + combining acute" under FormD) is added as a multi-rune grapheme
+    /// member. An entry whose normalized form is several graphemes (e.g. the
+    /// single grapheme fi-ligature under FormKC becomes the two members 'f'
+    /// and 'i') is split into one member per grapheme. Entries already in
+    /// <paramref name="form"/> pass through unchanged.
     /// </summary>
     /// <remarks>
-    /// You call this on a set yourself. Nothing in the parser calls it for you,
-    /// so it's opt-in: use it to project a set's members into a normalization
-    /// form ahead of time. The usual reason is a OneOf/NoneOf member that a
-    /// FormKC or FormKD Compile would turn into more than one grapheme, like the
-    /// ﬁ ligature becoming "fi". A set member has to be a single grapheme, so
-    /// Compile can't make that expansion for you. It errors and points you here.
-    /// Call this first to split the entry into separate members ('f' and 'i'),
-    /// then Compile with that same form so the input is normalized to match.
+    /// <see cref="InductorParser.Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> already normalizes every set member to the grammar's
+    /// form, so you don't need this for ordinary accents: a precomposed é and
+    /// a decomposed e + U+0301 match either way. This method is for the
+    /// compatibility forms, FormKC and FormKD, where one character can
+    /// normalize into several. The ﬁ ligature (U+FB01) becomes the two
+    /// letters "fi". A <see cref="InductorParser.Rules.OneOf(TokenSet)">Rules.OneOf</see> matches exactly one token, and a token is
+    /// one grapheme, so a member that has become two graphemes no longer fits
+    /// in the set, and <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> throws rather than guess what you meant.
+    /// <para>
+    /// You have two ways to resolve that, and they match different things.
+    /// To match the ligature as one unit, take it out of the set and match it
+    /// with <see cref="Rules.Literal(string)">Rules.Literal(string)</see> instead. <c>Literal("ﬁ")</c>
+    /// compiled under FormKC matches both "ﬁ" and "fi" in the input, because
+    /// a Literal matches a sequence of tokens and <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see> normalizes its
+    /// text. To match the letters individually, call this method on the set
+    /// before building the rule. The ligature member is replaced by 'f' and
+    /// 'i' as two separate members, so <c><see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(set)</c> matches a lone "f"
+    /// or a lone "i", one token at a time. Input containing the ligature
+    /// arrives as two tokens under FormKC, so matching the whole thing that
+    /// way takes two OneOfs in a row.
+    /// </para>
+    /// <para>
+    /// Either way, compile the grammar with the same form, so the input is
+    /// normalized the same way as the rule. Nothing in the parser calls this
+    /// method for you. It's an explicit opt-in.
+    /// </para>
     /// </remarks>
     public TokenSet WithCompatibilityEquivalents(NormalizationForm form)
     {
@@ -668,7 +689,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// True when this set has no members: its rune ranges and its multi-rune
     /// graphemes are both empty. A lone surrogate member, if any, lives in the
     /// rune ranges as a single-value interval, so this covers it too.
-    /// Equivalent to <c>this == TokenSet.Empty</c>.
+    /// Equivalent to <c><see cref="TokenSet.Empty">this == TokenSet.Empty</see></c>.
     /// </summary>
     public bool IsEmpty =>
         (_ranges == null || _ranges.Length == 0)
@@ -747,11 +768,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return true;
     }
 
-    /// <summary><see cref="Equals(TokenSet)"/> for an arbitrary object, returning false for non-TokenSet values.</summary>
+    /// <summary><see cref="Equals(TokenSet)">TokenSet.Equals(TokenSet)</see> for an arbitrary object, returning false for non-<see cref="InductorParser.TokenSet">TokenSet</see> values.</summary>
     public override bool Equals(object? obj) => obj is TokenSet other && Equals(other);
 
     /// <summary>
-    /// Hash consistent with <see cref="Equals(TokenSet)"/>: equal sets (including
+    /// Hash consistent with <see cref="Equals(TokenSet)">TokenSet.Equals(TokenSet)</see>: equal sets (including
     /// the empty set however it was built) hash equal.
     /// </summary>
     public override int GetHashCode()
@@ -776,10 +797,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return hash.ToHashCode();
     }
 
-    /// <summary>Value equality, same as <see cref="Equals(TokenSet)"/>.</summary>
+    /// <summary>Value equality, same as <see cref="Equals(TokenSet)">TokenSet.Equals(TokenSet)</see>.</summary>
     public static bool operator ==(TokenSet a, TokenSet b) => a.Equals(b);
 
-    /// <summary>Value inequality, the negation of <see cref="Equals(TokenSet)"/>.</summary>
+    /// <summary>Value inequality, the negation of <see cref="Equals(TokenSet)">TokenSet.Equals(TokenSet)</see>.</summary>
     public static bool operator !=(TokenSet a, TokenSet b) => !a.Equals(b);
 
     // Maximum number of entries ToString renders before truncating.
@@ -803,7 +824,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// else as U+XXXX. Multi-rune graphemes render as the user-perceived
     /// character itself, except that a control character or line/paragraph
     /// separator inside a grapheme renders as U+XXXX so something like the CRLF
-    /// entry in LineTerminators / Ascii.AnyWhitespace can't inject a raw newline
+    /// entry in <see cref="InductorParser.TokenSet.LineTerminators">TokenSet.LineTerminators</see> / <see cref="InductorParser.TokenSet.Ascii.AnyWhitespace">TokenSet.Ascii.AnyWhitespace</see> can't inject a raw newline
     /// into a one-line trace. Sets with more than MaxRenderedEntries entries are
     /// truncated with a "+N more" tail, keeping trace lines legible without
     /// dragging in the entire Unicode database.
@@ -857,12 +878,19 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return $"U+{codepoint:X4}";
     }
 
+    // The built-in sets are properties rather than public fields so their
+    // storage can change later (an eager field today, a Lazy tomorrow)
+    // without a binary-breaking change for callers compiled against the
+    // old shape. Each cheap set keeps an eager private backing field in the
+    // same textual position the public field had, so the static
+    // initialization order is exactly what it was.
+
     /// <summary>
-    /// The empty set, containing no tokens. Equivalent to default(TokenSet),
-    /// exposed as a named constant so callers can write TokenSet.Empty instead
+    /// The empty set, containing no tokens. Equivalent to default(<see cref="InductorParser.TokenSet">TokenSet</see>),
+    /// exposed as a named constant so callers can write <see cref="InductorParser.TokenSet.Empty">TokenSet.Empty</see> instead
     /// of relying on "default happens to mean empty."
     /// </summary>
-    public static readonly TokenSet Empty = default;
+    public static TokenSet Empty => default;
 
     /// <summary>
     /// The scalar-value universe: every code point in 0..0x10FFFF except the
@@ -870,8 +898,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// grapheme clusters (see remarks).
     /// </summary>
     /// <remarks>
-    /// Handy as the base for "everything except X" sets: <c>Universe - someSet</c>
-    /// is the composable TokenSet form of <c>NoneOf(X)</c>, and you can keep
+    /// Handy as the base for "everything except X" sets: <c><see cref="TokenSet.ScalarUniverse">TokenSet.ScalarUniverse - someSet</see></c>
+    /// is the composable <see cref="InductorParser.TokenSet">TokenSet</see> form of <c><see cref="Rules.NoneOf(TokenSet)">Rules.NoneOf(X)</see></c>, and you can keep
     /// combining it with <c>|</c>, <c>&amp;</c>, and <c>-</c>. Leaving the
     /// surrogate block out keeps that subtraction safe: a grammar that asks for
     /// "everything except space" won't quietly start admitting lone surrogates.
@@ -879,38 +907,47 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// It holds single scalar values only, never a multi-rune grapheme cluster.
     /// You can enumerate every code point in a bounded range, but not the
     /// open-ended set of all clusters since it is effectively infinite, so a "universe" only makes sense at the
-    /// scalar level. The consequence: <c>OneOf(Universe)</c> matches a
+    /// scalar level. The consequence: <c><see cref="Rules.OneOf(TokenSet)">Rules.OneOf(ScalarUniverse)</see></c> matches a
     /// single-scalar token but never a multi-rune grapheme like CRLF or a
-    /// skin-toned emoji, and <c>Universe - X</c> leaves those tokens out too
-    /// (they were never in it). To match any token at all, use <c>AnyToken()</c>.
-    /// To include specific clusters, add them with <c>Graphemes(...)</c>, like
-    /// <c>Universe | Graphemes("\r\n")</c>.
+    /// skin-toned emoji, and <c><see cref="TokenSet.ScalarUniverse">TokenSet.ScalarUniverse - X</see></c> leaves those tokens out too
+    /// (they were never in it). To match any token at all, use <see cref="Rules.AnyToken">Rules.AnyToken()</see>.
+    /// To include specific clusters, add them with <c><see cref="TokenSet.Graphemes">TokenSet.Graphemes(...)</see></c>, like
+    /// <c><see cref="TokenSet.Graphemes">TokenSet.ScalarUniverse | TokenSet.Graphemes("\r\n")</see></c>.
     /// </para>
     /// </remarks>
-    public static readonly TokenSet Universe = Range(0, 0x10FFFF);
+    public static TokenSet ScalarUniverse => _scalarUniverse;
+    private static readonly TokenSet _scalarUniverse = Range(0, 0x10FFFF);
 
     /// <summary>
     /// All surrogate code units U+D800..U+DFFF as a TokenSet. Matchable only by
-    /// grammars compiled with Compile(null), where the lexer surfaces a lone
-    /// surrogate as a one-char token. Under the default Compile(FormC) the lexer
+    /// grammars compiled with <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null), where the lexer surfaces a lone
+    /// surrogate as a one-char token. Under the default <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(FormC) the lexer
     /// pre-rejects lone surrogates from input, so this set has nothing to match.
     /// </summary>
     /// <remarks>
-    /// The two named entry points for putting surrogates into a TokenSet are
-    /// this constant (the whole block) and <see cref="SurrogateRange"/> (a
-    /// sub-block). Range, Single, and Runes reject surrogate endpoints /
-    /// arguments. So Surrogates and SurrogateRange are the only places fresh
+    /// Surrogates require an explicit choice to prevent bugs where a broad
+    /// character range accidentally includes surrogate code units.
+    /// <see cref="Range(int, int)">TokenSet.Range(int, int)</see> excludes the surrogate block even when
+    /// the range spans it. Use this set or <see cref="SurrogateRange">TokenSet.SurrogateRange(int, int)</see>
+    /// when you intend to match surrogates.
+    /// <para>
+    /// The two named entry points for putting surrogates into a <see cref="InductorParser.TokenSet">TokenSet</see> are
+    /// this constant (the whole block) and <see cref="SurrogateRange">TokenSet.SurrogateRange(int, int)</see> (a
+    /// sub-block). <see cref="Range(int, int)">TokenSet.Range</see>, <see cref="Single(int)">TokenSet.Single</see>, and <see cref="Runes(string)">TokenSet.Runes</see> reject surrogate endpoints /
+    /// arguments. So <see cref="Surrogates">TokenSet.Surrogates</see> and <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">TokenSet.SurrogateRange</see> are the only places fresh
     /// surrogates come from. From there union, intersection, and difference
-    /// move them between sets. A grammar that doesn't name Surrogates or
-    /// SurrogateRange never gets one in any TokenSet it builds.
+    /// move them between sets. A grammar that doesn't name <see cref="Surrogates">TokenSet.Surrogates</see> or
+    /// <see cref="InductorParser.TokenSet.SurrogateRange(System.Int32,System.Int32)">TokenSet.SurrogateRange</see> never gets one in any <see cref="InductorParser.TokenSet">TokenSet</see> it builds.
+    /// </para>
     /// </remarks>
-    public static readonly TokenSet Surrogates =
+    public static TokenSet Surrogates => _surrogates;
+    private static readonly TokenSet _surrogates =
         new TokenSet(new[] { new Interval(0xD800, 0xDFFF) });
 
-    /// <summary><see cref="Single(int)"/> for a <see cref="char"/>.</summary>
+    /// <summary><see cref="Single(int)">TokenSet.Single(int)</see> for a <see cref="char"/>.</summary>
     public static TokenSet Single(char c) => Single((int)c);
 
-    /// <summary><see cref="Single(int)"/> for a <see cref="Rune"/>.</summary>
+    /// <summary><see cref="Single(int)">TokenSet.Single(int)</see> for a <see cref="Rune"/>.</summary>
     public static TokenSet Single(Rune r) => Single(r.Value);
 
     /// <summary>
@@ -924,10 +961,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(new[] { new Interval(codepoint, codepoint) });
     }
 
-    /// <summary><see cref="Range(int, int)"/> for <see cref="char"/> endpoints.</summary>
+    /// <summary><see cref="Range(int, int)">TokenSet.Range(int, int)</see> for <see cref="char"/> endpoints.</summary>
     public static TokenSet Range(char low, char high) => Range((int)low, (int)high);
 
-    /// <summary><see cref="Range(int, int)"/> for <see cref="Rune"/> endpoints.</summary>
+    /// <summary><see cref="Range(int, int)">TokenSet.Range(int, int)</see> for <see cref="Rune"/> endpoints.</summary>
     public static TokenSet Range(Rune low, Rune high) => Range(low.Value, high.Value);
 
     /// <summary>
@@ -940,7 +977,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// the result contains no surrogate code units. So Range(0, 0x10FFFF) is
     /// every scalar value, with no surrogates, and that's the only thing it can
     /// mean. To get surrogates into a set, name them with
-    /// <see cref="Surrogates"/> or <see cref="SurrogateRange"/> and union them
+    /// <see cref="Surrogates">TokenSet.Surrogates</see> or <see cref="SurrogateRange">TokenSet.SurrogateRange(int, int)</see> and union them
     /// in.
     /// </remarks>
     public static TokenSet Range(int low, int high)
@@ -961,13 +998,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// A set covering [<paramref name="low"/>, <paramref name="high"/>] inside
     /// the surrogate block 0xD800..0xDFFF. Both endpoints must themselves be
     /// surrogate code units. For the whole block use the
-    /// <see cref="Surrogates"/> constant.
+    /// <see cref="Surrogates">TokenSet.Surrogates</see> constant.
     /// </summary>
     /// <remarks>
     /// Use this to select a specific sub-range of the surrogate block. The
-    /// result is matchable only by grammars compiled with Compile(null), where
+    /// result is matchable only by grammars compiled with <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(null), where
     /// the lexer surfaces lone surrogates as one-char tokens. Under the default
-    /// Compile(FormC) the lexer pre-rejects lone surrogates from input, so the
+    /// <see cref="Rule.Compile(System.Text.NormalizationForm?)">Rule.Compile</see>(FormC) the lexer pre-rejects lone surrogates from input, so the
     /// set has nothing to match.
     /// </remarks>
     public static TokenSet SurrogateRange(int low, int high)
@@ -985,20 +1022,20 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     /// <summary>
-    /// Construct a TokenSet from a list of code-point intervals. Each element
+    /// Construct a <see cref="InductorParser.TokenSet">TokenSet</see> from a list of code-point intervals. Each element
     /// is a closed range [Low, High]. The input doesn't need to be sorted or
     /// non-overlapping. The constructor normalizes (sorts, merges adjacent,
     /// drops empties). Bulk factory for large generated tables that would be
-    /// tedious to chain through the <see cref="op_BitwiseOr"/> operator.
+    /// tedious to chain through the <see cref="op_BitwiseOr">TokenSet.operator |(TokenSet, TokenSet)</see> operator.
     /// </summary>
     /// <remarks>
-    /// Like <see cref="Range(int, int)"/>, a tuple that straddles the surrogate
+    /// Like <see cref="Range(int, int)">TokenSet.Range(int, int)</see>, a tuple that straddles the surrogate
     /// block is split so the result contains no surrogate code units. Both
     /// endpoints must be valid scalars, but the interval between them can still
-    /// cover 0xD800..0xDFFF, so <c>FromRanges((0, 0x10FFFF))</c> is every scalar
-    /// value with no surrogates, the same set as <c>Range(0, 0x10FFFF)</c>. To
-    /// put surrogates into a set, name them with <see cref="Surrogates"/> or
-    /// <see cref="SurrogateRange"/> and union them in.
+    /// cover 0xD800..0xDFFF, so <c><see cref="TokenSet.FromRanges">TokenSet.FromRanges((0, 0x10FFFF))</see></c> is every scalar
+    /// value with no surrogates, the same set as <c><see cref="TokenSet.Range(int, int)">TokenSet.Range(0, 0x10FFFF)</see></c>. To
+    /// put surrogates into a set, name them with <see cref="Surrogates">TokenSet.Surrogates</see> or
+    /// <see cref="SurrogateRange">TokenSet.SurrogateRange(int, int)</see> and union them in.
     /// </remarks>
     /// <exception cref="ArgumentException">
     /// Any range has <c>high &lt; low</c>, or contains a value outside the
@@ -1034,8 +1071,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// grapheme that spans more than one rune throws: the caller
     /// passing <c>"\r\n"</c> or the decomposed <c>"e + U+0301"</c> almost
     /// certainly wanted either the grapheme (use
-    /// <see cref="Graphemes(string[])"/>) or the scalars built
-    /// explicitly (<c>Single(c1) | Single(c2)</c>), not whatever a
+    /// <see cref="Graphemes(string[])">TokenSet.Graphemes(string[])</see>) or the scalars built
+    /// explicitly (<c><see cref="TokenSet.Single(char)">TokenSet.Single(c1) | TokenSet.Single(c2)</see></c>), not whatever a
     /// silent rune-walk would have produced. Use this when you want
     /// "the set of these N characters" from a string of ASCII or
     /// otherwise non-combining scalars.
@@ -1086,12 +1123,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// Build a set whose members are one or more grapheme clusters.
-    /// Each array element must be exactly one grapheme (one full UAX #29
+    /// Each array element must be exactly one grapheme (one full <a href="https://www.unicode.org/reports/tr29/">UAX #29</a>
     /// text element). Passing a string with multiple graphemes throws.
-    /// Use this when the set members are graphemes: CRLF, a decomposed
-    /// <c>a + U+0301</c>, a joined family emoji, skin-toned faces,
-    /// regional-indicator flags. For sets of runes (the common ASCII
-    /// case), use <see cref="Runes(string)"/>.
+    /// Use this when the set members are graphemes, for example CRLF, a
+    /// decomposed <c>a + U+0301</c>, a joined family emoji, a skin-toned
+    /// face, or a regional-indicator flag. For sets of runes (the common
+    /// ASCII case), use <see cref="Runes(string)">TokenSet.Runes(string)</see>.
     /// </summary>
     /// <exception cref="ArgumentException">
     /// <paramref name="clusters"/> contains a null element, an empty
@@ -1533,9 +1570,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     private static readonly Lazy<TokenSet> _inlineWhitespace = new Lazy<TokenSet>(BuildInlineWhitespace);
 
     /// <summary>
-    /// The set of Unicode scalar values that are letters: the same characters
-    /// char.IsLetter and Rune.IsLetter consider letters (uppercase, lowercase,
-    /// titlecase, modifier, and other letters).
+    /// The letters: every character in Unicode's five Letter general
+    /// categories, Uppercase_Letter (Lu), Lowercase_Letter (Ll),
+    /// Titlecase_Letter (Lt), Modifier_Letter (Lm), and Other_Letter (Lo).
+    /// That's the same characters <see cref="char.IsLetter(char)">char.IsLetter</see>
+    /// and <a href="https://learn.microsoft.com/dotnet/api/system.text.rune.isletter">Rune.IsLetter</a>
+    /// accept. See
+    /// <a href="https://www.unicode.org/reports/tr44/#General_Category_Values">UAX #44, General Category Values</a>.
     /// </summary>
     /// <remarks>
     /// Use this for things that are literally letters: identifier characters in
@@ -1546,19 +1587,32 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// rejects digits, whitespace, punctuation, symbols, and any multi-rune
     /// grapheme like emoji. A grammar that wants "match everything up to the next
     /// delimiter" or "match anything the other rules didn't claim" should use
-    /// NoneOf(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
+    /// <see cref="Rules.NoneOf(TokenSet)">Rules.NoneOf</see>(stopSet) for delimiter-based stops, or Not(stopRule) + <see cref="Rules.AnyToken">Rules.AnyToken</see>()
     /// for rule-based stops.
     /// </para>
     /// </remarks>
     public static TokenSet Letters => _letters.Value;
 
-    /// <summary>The decimal-digit set: the characters Unicode classifies as
-    /// decimal digits.</summary>
+    /// <summary>
+    /// The decimal digits: every character in Unicode's Decimal_Number (Nd)
+    /// general category, the same characters <see cref="char.IsDigit(char)">char.IsDigit(char)</see>
+    /// and <a href="https://learn.microsoft.com/dotnet/api/system.text.rune.isdigit">Rune.IsDigit</a> accept.
+    /// That's 0-9 plus the digit sets of other scripts (Arabic-Indic,
+    /// Devanagari, fullwidth, and so on). Superscripts and Roman numerals
+    /// aren't included, since Unicode files them under other Number
+    /// categories. See
+    /// <a href="https://www.unicode.org/reports/tr44/#General_Category_Values">UAX #44, General Category Values</a>.
+    /// </summary>
     public static TokenSet Digits => _digits.Value;
 
     /// <summary>
-    /// Intra-line whitespace: every rune char.IsWhiteSpace accepts except the
-    /// UTS #18 line terminators. See <see cref="LineTerminators"/> for those.
+    /// Whitespace within a line: Unicode's White_Space property (what
+    /// char.IsWhiteSpace tests) minus the <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> line terminators. That
+    /// leaves TAB plus every Space_Separator (Zs) character: SPACE, NO-BREAK
+    /// SPACE, OGHAM SPACE MARK, EN QUAD through HAIR SPACE, NARROW NO-BREAK
+    /// SPACE, MEDIUM MATHEMATICAL SPACE, and IDEOGRAPHIC SPACE. It's the class
+    /// Perl, PCRE, and Java regexes call horizontal whitespace, <c>\h</c>.
+    /// See <see cref="LineTerminators">TokenSet.LineTerminators</see> for the terminators.
     /// </summary>
     public static TokenSet InlineWhitespace => _inlineWhitespace.Value;
 
@@ -1579,20 +1633,26 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     };
 
     /// <summary>
-    /// The line terminators defined by UTS #18 §1.6 (RL1.6): the seven single-rune
+    /// The line terminators defined by <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6): the seven single-rune
     /// terminators LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL
     /// (U+0085), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR (U+2029), plus the
-    /// two-rune CRLF (which UAX #29 keeps glued together as one
-    /// grapheme).
+    /// two-rune CRLF. <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> keeps CR and LF glued together as one
+    /// grapheme, so the lexer hands a CRLF line break back as a single
+    /// two-rune token, and a set holding only CR and LF would miss it.
     /// </summary>
     /// <remarks>
     /// Matches what Java's \R and most modern regex engines treat as a
     /// newline (ECMAScript's "line terminator" is the narrower LF / CR /
-    /// LS / PS subset). CRLF lives in the set as a
-    /// multi-rune entry, so OneOf / NoneOf / ScanUntil / ScanWhile against this
+    /// LS / PS subset). VT (U+000B) and FF (U+000C) look like ordinary
+    /// whitespace, but UTS #18 counts them as line terminators. That's why
+    /// they're here, why <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> consumes them, and why
+    /// <see cref="InlineWhitespace">TokenSet.InlineWhitespace</see> and <see cref="Ascii.InlineWhitespace">TokenSet.Ascii.InlineWhitespace</see>
+    /// leave them out. CRLF lives in the set as a
+    /// multi-rune entry, so <see cref="InductorParser.Rules.OneOf(System.String)">Rules.OneOf</see> / <see cref="InductorParser.Rules.NoneOf(System.String)">Rules.NoneOf</see> / <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see> / <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">Rules.ScanWhile</see> against this
     /// set all treat the CRLF grapheme as one terminator.
     /// </remarks>
-    public static readonly TokenSet LineTerminators = BuildLineTerminators();
+    public static TokenSet LineTerminators => _lineTerminators;
+    private static readonly TokenSet _lineTerminators = BuildLineTerminators();
 
     // Build LineTerminators from LineTerminatorScalars (the single source) plus
     // the CRLF grapheme, so adding or removing a terminator means editing one
@@ -1621,10 +1681,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         new TokenSet(Array.Empty<Interval>(), new[] { "\r\n" });
 
     /// <summary>
-    /// Full-Unicode intra-line whitespace plus every UTS #18 line terminator
-    /// (the seven single-rune terminators and the two-rune CRLF). Use
-    /// this for grammars that treat any whitespace as an ordinary separator. For
-    /// ASCII-only whitespace use <see cref="Ascii.AnyWhitespace"/>.
+    /// <see cref="InlineWhitespace">TokenSet.InlineWhitespace</see> | <see cref="LineTerminators">TokenSet.LineTerminators</see>: every
+    /// whitespace rune within a line plus every line terminator, including
+    /// the two-rune CRLF. Use this for grammars that treat any whitespace,
+    /// newlines included, as an ordinary separator. For the ASCII-only
+    /// version use <see cref="Ascii.AnyWhitespace">TokenSet.Ascii.AnyWhitespace</see>.
     /// </summary>
     public static TokenSet AnyWhitespace => _anyWhitespace.Value;
     private static readonly Lazy<TokenSet> _anyWhitespace =
@@ -1634,14 +1695,20 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// The single-member set holding U+FFFD REPLACEMENT CHARACTER.
     /// </summary>
     /// <remarks>
-    /// .NET's Unicode decoders (Encoding.UTF8, Encoding.Unicode,
-    /// Encoding.UTF32) substitute U+FFFD for ill-formed byte sequences under the
-    /// default DecoderReplacementFallback, so a U+FFFD in your input is the
-    /// fingerprint of an upstream decoder that swallowed something malformed.
+    /// Unicode defines U+FFFD as the substitution character for data that
+    /// can't be converted to Unicode. See
+    /// <a href="https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-5/">Unicode Standard, Section 5.22: U+FFFD Substitution in Conversion</a>.
+    /// <para>
+    /// .NET's Unicode decoders (<see cref="System.Text.Encoding.UTF8">Encoding.UTF8</see>, <see cref="System.Text.Encoding.Unicode">Encoding.Unicode</see>,
+    /// <see cref="System.Text.Encoding.UTF32">Encoding.UTF32</see>) substitute U+FFFD for ill-formed byte sequences under the
+    /// default <see cref="System.Text.DecoderReplacementFallback"/>, so a U+FFFD in your input can
+    /// indicate that an upstream decoder replaced malformed data.
     /// Grammars that want to surface or reject those markers can use
-    /// OneOf(TokenSet.Replacement) or NoneOf(TokenSet.Replacement | ...).
+    /// OneOf(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see>) or <see cref="Rules.NoneOf(TokenSet)">Rules.NoneOf</see>(<see cref="InductorParser.TokenSet.Replacement">TokenSet.Replacement</see> | ...).
+    /// </para>
     /// </remarks>
-    public static readonly TokenSet Replacement = Single(0xFFFD);
+    public static TokenSet Replacement => _replacement;
+    private static readonly TokenSet _replacement = Single(0xFFFD);
 
     /// <summary>
     /// ASCII-restricted versions of the built-in sets, for grammars that want
@@ -1650,34 +1717,38 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     public static class Ascii
     {
         /// <summary>The ASCII letters A-Z and a-z.</summary>
-        public static readonly TokenSet Letters = Range('A', 'Z') | Range('a', 'z');
+        public static TokenSet Letters => _letters;
+        private static readonly TokenSet _letters = Range('A', 'Z') | Range('a', 'z');
 
         /// <summary>The ASCII digits 0-9.</summary>
-        public static readonly TokenSet Digits = Range('0', '9');
+        public static TokenSet Digits => _digits;
+        private static readonly TokenSet _digits = Range('0', '9');
 
         /// <summary>
-        /// ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
-        /// full-Unicode <see cref="TokenSet.InlineWhitespace"/>.
+        /// ASCII intra-line whitespace: SPACE and TAB only. VT and FF look
+        /// like whitespace but are line terminators per UTS #18, so they live
+        /// in <see cref="TokenSet.LineTerminators">TokenSet.LineTerminators</see> instead. Mirrors the
+        /// full-Unicode <see cref="TokenSet.InlineWhitespace">TokenSet.InlineWhitespace</see>.
         /// </summary>
-        public static readonly TokenSet InlineWhitespace = Runes(" \t");
+        public static TokenSet InlineWhitespace => _inlineWhitespace;
+        private static readonly TokenSet _inlineWhitespace = Runes(" \t");
         /// <summary>
-        /// ASCII whitespace including every ASCII line terminator: SPACE, TAB,
-        /// LF, VT, FF, CR, plus the two-rune CRLF. The full-Unicode
-        /// <see cref="TokenSet.AnyWhitespace"/> restricted to ASCII.
+        /// <see cref="InlineWhitespace">TokenSet.Ascii.InlineWhitespace</see> plus the ASCII
+        /// members of <see cref="TokenSet.LineTerminators">TokenSet.LineTerminators</see>: SPACE, TAB, LF, VT,
+        /// FF, CR, and the two-rune CRLF, which the lexer hands back as a
+        /// single token, so a set holding only CR and LF would miss it. The
+        /// full-Unicode <see cref="TokenSet.AnyWhitespace">TokenSet.AnyWhitespace</see>
+        /// restricted to ASCII.
         /// </summary>
         /// <remarks>
-        /// VT (U+000B) and FF (U+000C) look like ordinary whitespace, but
-        /// UTS #18 counts them as line terminators. That's why they're in
-        /// <see cref="TokenSet.LineTerminators"/>, why Rules.EndOfLine()
-        /// consumes them, and why <see cref="InlineWhitespace"/> (SPACE and TAB)
-        /// leaves them out. Use this set for grammars that treat newlines as
-        /// ordinary whitespace. To keep line terminators separate from
-        /// intra-line whitespace, use <see cref="InlineWhitespace"/> and
-        /// Rules.EndOfLine() instead. CR, LF, and the CRLF grapheme all live in
-        /// the set so OneOf / NoneOf / ScanUntil match each consistently.
+        /// Use this set for grammars that treat newlines as ordinary
+        /// whitespace. To keep line terminators separate from intra-line
+        /// whitespace, use <see cref="InlineWhitespace">TokenSet.Ascii.InlineWhitespace</see> and
+        /// <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see> instead.
         /// </remarks>
-        public static readonly TokenSet AnyWhitespace =
-            InlineWhitespace
+        public static TokenSet AnyWhitespace => _anyWhitespace;
+        private static readonly TokenSet _anyWhitespace =
+            _inlineWhitespace
             | Single('\n')       // LF
             | Single('\v')       // VT
             | Single('\f')       // FF
@@ -1686,7 +1757,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                                  // static init skips the segmentation-based
                                  // validation (see CrlfGraphemeSet)
         /// <summary>The ASCII hex digits 0-9, a-f, and A-F.</summary>
-        public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
+        public static TokenSet HexDigits => _hexDigits;
+        private static readonly TokenSet _hexDigits = _digits | Range('a', 'f') | Range('A', 'F');
     }
 
     // Builds InlineWhitespace: every code point char.IsWhiteSpace accepts,
@@ -1736,14 +1808,14 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// True when <paramref name="c"/> is one of the single-rune line terminators
-    /// UTS #18 §1.6 (RL1.6) defines: LF (U+000A), VT (U+000B), FF (U+000C),
+    /// <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6) defines: LF (U+000A), VT (U+000B), FF (U+000C),
     /// CR (U+000D), NEL (U+0085), LINE SEPARATOR (U+2028), or PARAGRAPH SEPARATOR
     /// (U+2029).
     /// </summary>
     /// <remarks>
-    /// This is the same set <see cref="LineTerminators"/> and Rules.EndOfLine()
+    /// This is the same set <see cref="LineTerminators">TokenSet.LineTerminators</see> and <see cref="InductorParser.Rules.EndOfLine">Rules.EndOfLine()</see>
     /// recognize, so scanning raw input with it agrees with the line the parser
-    /// reports (ParseResult.ErrorLine, SourcePosition.Line). It tests one code
+    /// reports (<see cref="InductorParser.ParseResult.ErrorLine">ParseResult.ErrorLine</see>, <see cref="InductorParser.SyntaxTree.SourcePosition.Line">SourcePosition.Line</see>). It tests one code
     /// point, so the two-rune CRLF grapheme isn't matched as a unit, but the CR
     /// of a CRLF is itself a terminator, so a char-by-char scan still stops a line
     /// at the right place.
@@ -1752,7 +1824,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// True when <paramref name="codepoint"/> is one of the single-rune line
-    /// terminators UTS #18 §1.6 (RL1.6) defines. See <see cref="IsLineTerminator(char)"/>.
+    /// terminators <a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6 (RL1.6) defines. See <see cref="IsLineTerminator(char)">TokenSet.IsLineTerminator(char)</see>.
     /// </summary>
     public static bool IsLineTerminator(int codepoint)
     {

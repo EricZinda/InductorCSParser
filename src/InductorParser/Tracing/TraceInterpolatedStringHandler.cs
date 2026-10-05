@@ -40,7 +40,7 @@ namespace InductorParser.Tracing;
 
 /// <summary>
 /// Interpolated string handler for <c>Lexer.Trace</c> and the
-/// <c>Rule.TraceSuccess</c> / <c>Rule.TraceFailure</c> helpers. Defers the
+/// <see cref="InductorParser.Rule.TraceSuccess(InductorParser.Lexing.Lexer,InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceSuccess</see> / <see cref="InductorParser.Rule.TraceFailure(InductorParser.Lexing.Lexer, InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceFailure</see> helpers. Defers the
 /// <c>$"..."</c> formatting until tracing has decided the message will be
 /// emitted, so callers pay nothing for the formatting when tracing is off.
 /// </summary>
@@ -80,9 +80,9 @@ public ref struct TraceInterpolatedStringHandler
 
     /// <summary>
     /// Constructor the compiler resolves for the short-form
-    /// Rule.TraceSuccess / Rule.TraceFailure helpers, whose handler attribute
+    /// <see cref="InductorParser.Rule.TraceSuccess(InductorParser.Lexing.Lexer,InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceSuccess</see> / <see cref="InductorParser.Rule.TraceFailure(InductorParser.Lexing.Lexer, InductorParser.Tracing.TraceInterpolatedStringHandler)">Rule.TraceFailure</see> helpers, whose handler attribute
     /// only adds the lexer argument. Defaults the level to
-    /// <see cref="TraceLevel.Diagnostic"/>.
+    /// <see cref="TraceLevel.Diagnostic">TraceLevel.Diagnostic</see>.
     /// </summary>
     public TraceInterpolatedStringHandler(
         int literalLength,

@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks Condition="'$(InductorParserTestFrameworks)' == ''">net8.0;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(InductorParserTestFrameworks)' != ''">$(InductorParserTestFrameworks)</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -54,13 +55,13 @@
     <ProjectReference Include="..\InductorParser.Tests.GlobalizationChild\InductorParser.Tests.GlobalizationChild.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <!-- The state-machine test project in ExperimentalSrc/ shares
-       fixtures from this project (TraceTestHelpers, UnicodeExamples,
-       ChordGrammar, BacklogGrammar) which are internal. Granting it
-       visibility here lets it use those types directly without having
-       to either duplicate them or expose them as public to all
-       consumers of InductorParser.Tests. The grant is harmless when
-       ExperimentalSrc is not present. -->
+  <!-- The state-machine engine's test project, which lives in its own
+       repo, shares fixtures from this project (TraceTestHelpers,
+       UnicodeExamples, ChordGrammar, BacklogGrammar) which are
+       internal. Granting it visibility here lets it use those types
+       directly without having to either duplicate them or expose them
+       as public to all consumers of InductorParser.Tests. The grant is
+       harmless when that project is not present. -->
   <ItemGroup>
     <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
   </ItemGroup>
@@ -77,7 +78,8 @@
     <EmbeddedResource Remove="Unity\**" />
   </ItemGroup>
 
-  <!-- Real-world Prolog / HTN fixture files from the InductorHtn repo,
+  <!-- Real-world Prolog / HTN fixture files from the InductorHtn repo
+       (MIT licensed, see the note in PrologGrammarTests.cs for authorship),
        used as end-to-end parse corpus for PrologGrammarTests. Copied to
        the test output directory so tests can read them as plain files. -->
   <ItemGroup>

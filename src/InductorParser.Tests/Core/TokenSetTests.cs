@@ -1156,6 +1156,41 @@ public class TokenSetTests
     }
 
     [Test]
+    public void InlineWhitespace_is_tab_plus_the_space_separator_category()
+    {
+        // The doc comment's definition: Unicode's White_Space property
+        // (char.IsWhiteSpace) minus the UTS #18 line terminators leaves
+        // TAB plus every Space_Separator (Zs) character, the class regex
+        // engines call horizontal whitespace (\h). The set is built by a
+        // predicate scan, so this locks in that the scan lands on exactly
+        // that set and the doc claim stays true.
+        AssertEqual(
+            TokenSet.InlineWhitespace,
+            TokenSet.Single('\t') | TokenSet.Category(UnicodeCategory.SpaceSeparator));
+    }
+
+    [Test]
+    public void NormalizedFor_drops_an_entry_the_normalizer_refuses()
+    {
+        // U+FFFE is the one well-formed scalar the normalizers refuse, on
+        // both implementations (Noncharacter_FFFE_throws_from_both in
+        // UnicodeNormalizationTests). NormalizedFor drops such an entry
+        // instead of failing the whole set. That's harmless because a
+        // normalizing Parse reports input containing U+FFFE as
+        // MalformedInput before any rule runs, so the entry could never
+        // have matched. This locks in the drop, and that the rest of the
+        // set survives it.
+        var set = TokenSet.Single('a') | TokenSet.Single(0xFFFE);
+
+        var normalized = set.NormalizedFor(NormalizationForm.FormC);
+
+        Assert.That(normalized.ContainsRune('a'), Is.True,
+            "an ordinary entry must survive the normalization");
+        Assert.That(normalized.ContainsRune(0xFFFE), Is.False,
+            "the entry the normalizer refuses must be dropped");
+    }
+
+    [Test]
     public void AnyWhitespace_contains_inline_whitespace_and_line_terminators()
     {
         // The full-Unicode "regex \s" set: every rune that's intra-line

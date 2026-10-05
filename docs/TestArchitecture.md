@@ -6,6 +6,10 @@ Here's every way to run the tests, all in one place:
 # The everyday suite. A clean run is the gate for landing a change.
 ./test.sh
 
+# One supported .NET runtime instead of both.
+./test.sh --framework net8.0
+./test.sh --framework net10.0
+
 # Everything: the everyday suite, every [Explicit] suite, and the Unity
 # IL2CPP pass. Takes a long time, downloads UCD files from unicode.org,
 # and needs Unity installed.
@@ -54,7 +58,59 @@ The rest of this doc answers one question: what does a rule's test file need bef
 
 Shared helpers (`TraceTestHelpers.cs`, `NormalizationExamples.cs`, the matrix helpers) sit loose at the project root. Files in the first three folders all use `namespace InductorParser.Tests;`.
 
-Every failure test below leans on the error model in [ErrorArchitecture.md](ErrorArchitecture.md): when a parse fails, the deepest failure wins, and the reported position is where the failing read started, not where it gave up.
+## Supported and Tested Platforms
+
+The library is tested in the configurations below. The Unicode column shows
+what `UnicodeEnvironment.Implementation = Automatic` selects in each one.
+
+| Platform | Library build | Test coverage | Automatic Unicode implementation |
+|---|---|---|---|
+| .NET 8 CoreCLR | `net8.0` | All test projects in `InductorParser.sln`, including the opt-in suites when selected | `Runtime`: `StringInfo` and `string.Normalize` |
+| .NET 10 CoreCLR | `net8.0` | All test projects in `InductorParser.sln`, including the opt-in suites when selected | `Runtime`: `StringInfo` and `string.Normalize` |
+| Unity 6000.3.13f1 Standalone IL2CPP | `netstandard2.1` | The shared `Core`, `Rules`, and `E2EExamples` tests | `Bundled`: the built-in Unicode 16.0 segmenter and normalizer |
+
+.NET 8 is the earliest modern .NET runtime directly tested. The table describes
+the default Unicode implementation tested on each platform. Applications can
+override it at startup.
+
+The Unity pass directly verifies only the listed editor version and a
+Standalone IL2CPP player. WebGL, iOS, Switch, other Unity versions, and other
+`netstandard2.1` hosts are compatibility goals, but the current test matrix
+doesn't run on them.
+
+Running `./test.sh` tests both supported .NET versions. Pass `--framework
+net8.0` or `--framework net10.0` to run just one. To try another installed
+runtime without changing the project files, override the test-framework list:
+
+```sh
+./test.sh -p:InductorParserTestFrameworks=net9.0
+```
+
+This only reaches runtimes newer than the everyday pair. The test SDK refuses
+to build a test project for anything older than net8.0, so a runtime below
+.NET 8 can't be exercised this way.
+
+.NET 9 was spot-checked this way on 2026-09-23. The everyday suite and the
+DeepCampaign sweeps both passed on the 9.0.20 runtime, and
+`GlobalizationOracleFixture` admits it, but it stays out of the everyday
+matrix because it's a short-term-support release. `./test.sh` doesn't run it
+unless you pass the override.
+
+The Unity script uses 6000.3.13f1 by default. `UNITY_VERSION` selects another
+Unity Hub installation, while `UNITY_EDITOR` accepts an explicit editor path:
+
+```sh
+UNITY_VERSION=6000.3.13f1 ./src/InductorParser.Tests/runil2cpptest.sh
+UNITY_EDITOR=/path/to/Unity ./src/InductorParser.Tests/runil2cpptest.sh
+```
+
+The script copies the Unity project into `test-results/` (gitignored), opens
+that copy, and deletes it when the script exits, so another editor version
+can't upgrade or dirty the checked-in project. The copy sits next to the
+results rather than in the shell's temp directory because, under WSL, `/tmp`
+is on the Linux filesystem and reaches Windows Unity as a network path. These
+overrides are exploratory: a version becomes part of the supported matrix only
+when it's added to the default configuration.
 
 ## What Every Rule's Test File Needs
 
@@ -70,7 +126,8 @@ Every failure test below leans on the error model in [ErrorArchitecture.md](Erro
 
 **Trace output.** One success-path and one failure-path trace test asserting the whole trace verbatim with `Assert.That(sink.ToString(), Is.EqualTo(...))`, so a format change fails right next to the code that changed. `NewSink()` and `Lines(...)` come from `TraceTestHelpers.cs`. (`ZeroOrMore` can't fail, so it only has the success side.)
 
-**The two matrices**, for leaf rules. Covered in "Matrix Tests" below.
+**The two matrices**, for leaf rules. Covered in "Normalization Matrix Tests"
+below.
 
 ## Extra Tests by Rule Shape
 
@@ -122,15 +179,29 @@ public void And_later_child_failure_reports_at_deeper_position()
 
 **Lookahead and forwarding rules** (`Not`, `Peek`, `LateBoundRule`, `Alias`). A zero-consumption test: position doesn't move when the rule runs. For `LateBoundRule`, cover bound and unbound states, the "never bound" error, and its always-rejected modifiers.
 
-## Matrix Tests
+## Normalization Matrix Tests
 
-Normalization can rewrite both the grammar's stored text and the input at Compile time, and the tests that catch normalization bugs are parameterized matrices, not hand-picked examples. Both matrices draw from `NormalizationExamples.RowFormPairs` at the test project root: a table of grapheme behaviors crossed with the four `NormalizationForm` values, with a self-check fixture asserting every column matches what `string.Normalize` really produces. New normalization tests should pull cases from this table too.
+Normalization tests use `NormalizationExamples.RowFormPairs`, which crosses
+representative grapheme cases with all four `NormalizationForm` values. A
+self-check verifies the expected values against `string.Normalize`. New
+normalization tests should reuse this table.
 
-The matching matrix runs every leaf rule that rewrites stored text under a form (`Token`, `Literal`, `LiteralIgnoreAsciiCase`, `OneOf`, `NoneOf`, `ScanWhile`, `ScanUntil`) against every row, under four shapes: bare, `OneOrMore(leaf)`, `Or(leaf, fallback)`, and `And(leaf, Eof())`. The composite shapes matter because an evaluator optimization that peeks precomputed first-token data is exactly the code that goes wrong when that data goes stale under normalization, and `And` + `Eof` catches a leaf that consumed the wrong span.
+The test project has two normalization matrices:
 
-The SourceRange matrix runs every leaf-emitting rule as the target of `And(Literal(prefix), target)` under every form and asserts the target Symbol's `SourceRange` points into the caller's original input. Whenever a form changes the input's length, a bug here silently reports positions in the internal normalized copy instead.
+- **Matching:** Runs every rule whose stored text is normalized (`Token`,
+  `Literal`, `LiteralIgnoreAsciiCase`, `OneOf`, `NoneOf`, `ScanWhile`, and
+  `ScanUntil`) against every case and normalization form. It tests each rule
+  directly and inside `OneOrMore`, `Or`, and `And(..., Eof())` so that both
+  matching decisions and the amount of input consumed are checked.
+- **Source mapping:** Runs every rule that emits a Symbol after a prefix and
+  verifies that its `SourceRange` refers to the caller's original input, even
+  when normalization changes its length.
 
-Each rule also has one `SourceText_on_<Rule>_returns_matched_text_under_every_FlattenType` test: FlattenType controls what shows up in the tree, never what text a Symbol reports. Rule-shape-specific SourceRange cases (zero-width matches, multi-line spans, Delete-flattened children) go in the rule's file. The machinery-level position tests (`Core/SymbolPositionTests.cs`, `Core/RawSourceTextTests.cs`) cover line/column derivation and original-text recovery.
+Each emitting rule also verifies that `SourceText` returns the matched original
+text under every `FlattenType`. Rule-specific cases, such as zero-width or
+multi-line ranges, belong in the rule's test file. Low-level position and
+original-text recovery are covered by `Core/SymbolPositionTests.cs` and
+`Core/RawSourceTextTests.cs`.
 
 ## Cross-Cutting Tests
 
@@ -157,7 +228,7 @@ The recurring mistakes to avoid:
 
 ## The Unicode Implementation Setting
 
-`UnicodeEnvironment.Implementation` is one process-wide setting that picks the segmenter and normalizer together. The test architecture has one rule about it: no test sets it, except `UnicodeEnvironmentSettingTests` and `HostGlobalizationCheckTests`, the two fixtures whose whole job is testing the setting (and its neighbor `AcceptHostGlobalization`).
+`UnicodeEnvironment.Implementation` is one process-wide setting that picks the segmenter and normalizer together. The test architecture has one rule about it: no test sets it, except `UnicodeEnvironmentSettingTests` and `HostGlobalizationCheckTests`, the two fixtures whose whole job is testing the setting (and its neighbor `AllowNonstandardRuntimeNormalization`).
 
 Every other test runs on `Automatic`, and the first segmentation or normalization query freezes that to the build's default: `Runtime` on the net8.0 library build `dotnet test` loads, `Bundled` on the netstandard2.1 build Unity loads. That's the coverage plan. The same test sources run twice, once per platform, so each Compile-and-Parse test exercises the runtime implementations on CoreCLR and the built-in ones under IL2CPP, and no test has to touch the setting to make that happen.
 
@@ -169,37 +240,57 @@ Tests that target one specific implementation never rely on the ambient resoluti
 
 The resolution itself is asserted at both ends with behavior tripwires, not just enum checks: the setting fixture asserts Automatic resolves to Runtime on net8.0, and the Unity smoke test asserts it resolves to `Bundled` in the player, with the CRLF cluster length and the fi-ligature expansion failing first if the wrong implementation is in use. The freeze semantics defend the arrangement structurally too. Once anything has queried, a stray assignment throws instead of silently flipping the implementation under other fixtures.
 
-## The Globalization Oracle
+## The Unicode Test Environment
 
-The differential tests in `Lexing/` compare the built-in segmenter and normalizer against the runtime's `StringInfo` and `string.Normalize`, and those two runtime implementations get their Unicode data from different places. `string.Normalize` hands the work to ICU (International Components for Unicode, the open-source library most operating systems supply for Unicode algorithms), and which ICU a host has moves with OS updates (or disappears entirely under Windows NLS or invariant globalization). `StringInfo`'s Unicode data is compiled into the runtime itself, so its version stamp is the runtime version.
+The differential tests in `Lexing/` compare the built-in implementation with
+.NET's `StringInfo` and `string.Normalize`. Because `StringInfo` gets its data
+from the runtime while `string.Normalize` uses the host's globalization
+library, those results could otherwise vary by machine.
 
-The suite enforces one known configuration: `GlobalizationOracleFixture` is a `[SetUpFixture]` that runs before any test in the assembly, and it fails the whole run, with a message saying what to fix, unless three things hold: the process is .NET 10 (the runtime whose `StringInfo` the built-in segmenter is verified against), the loaded ICU is exactly the ICU 72.1 the test project ships (the `Microsoft.ICU.ICU4C.Runtime` reference in `InductorParser.Tests.csproj`), and neither NLS nor invariant globalization is active. A green run therefore always means "verified against .NET 10 with ICU 72.1", and a machine whose globalization drifted can't quietly redefine what the differential tests prove.
+`GlobalizationOracleFixture` therefore requires .NET 8, 9, or 10, the ICU
+72.1 package shipped with the test project, and normal ICU mode rather than
+Windows NLS or invariant globalization. It stops the test assembly if any
+requirement isn't met. Each passing differential run therefore identifies the
+runtime it matched and always uses the same ICU normalization data.
 
-The odd-looking part is that ICU 72.1 is Unicode 15.0 data while the built-in tables are Unicode 16.0. It stays the oracle for two reasons. No newer app-local ICU package exists to ship. And the mismatch costs almost nothing: Unicode's normalization stability policy says a character's normalization never changes once it's assigned, so ICU 72.1 and the 16.0 tables give identical answers for every character assigned through 15.0. The normalization sweeps skip only the code points 16.0 added (`UnicodeVersionDelta.cs` holds that set) and compare exactly everywhere else.
+Two suites establish different claims:
 
-Under Windows NLS the fixture fails the run outright rather than letting the tests execute against NLS data, so a green run can't secretly mean "matches NLS". Running under NLS is still supported for users (that's what `AcceptHostGlobalization` is for, described below), it just has no test coverage of its own. If it ever needs some, it would get its own named test run instead of being silently selected by the host.
+- The differential tests establish that the implementation matches .NET in
+  that environment. ICU 72.1 contains Unicode 15.0 data, so the
+  normalization sweep excludes only the characters added in Unicode 16.0.
+  `UnicodeVersionDelta.cs` lists them. Unicode's normalization stability
+  policy keeps the results for previously assigned characters unchanged.
+- The `[Explicit]` Unicode conformance tests establish compliance with Unicode
+  16.0 by running `NormalizationTest-16.0.0.txt` and
+  `GraphemeBreakTest-16.0.0.txt`. They include the characters omitted from the
+  differential sweep.
 
-The tests make two separate claims, proven by two separate suites. "Matches .NET" comes from the differential tests, run against the enforced environment above. "Follows the Unicode standard" comes from the `[Explicit]` UnicodeConformance suites, which run the official answer files (`NormalizationTest-16.0.0.txt` and `GraphemeBreakTest-16.0.0.txt`) against the built-in implementations. The two overlap on purpose: the code points the differential sweeps skip, including Unicode 16.0's context-sensitive composites, are covered by the conformance files, so nothing falls through the gap.
-
-The shipped library also throws by default in these configurations so that developers understand that their runtime environment has been modified. When the Runtime implementation is active and the process runs invariant globalization or NLS, the first normalizing Compile or Parse throws. The code is `HostGlobalizationCheck` in `src/InductorParser/Lexing/Unicode/`, and `UnicodeEnvironment.AcceptHostGlobalization` is the opt-out.
-
-The check is two steps, notice the mode and then throw, and each step gets its own test. The throw step is easy to test in-process: `HostGlobalizationCheckTests` uses an internal hook to make the check believe the process is invariant or NLS, then asserts the exception, the message, and the `AcceptHostGlobalization` opt-out.
-
-The notice-the-mode step can't be tested that way. A process's globalization is fixed the moment it starts, and the test process always starts in normal ICU mode. So `HostGlobalizationChildProcessTests` starts a process that genuinely is in the bad mode: it launches the small `InductorParser.Tests.GlobalizationChild` console app with `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` or `DOTNET_SYSTEM_GLOBALIZATION_USENLS` set in its environment, and asserts the real detection fires there.
-
-The child app deliberately ships no app-local ICU. That makes its clean-environment run useful too: it proves detection passes against plain host globalization, something the ICU-pinned test process can never check.
+The shipped library also detects host configurations for which the Runtime
+implementation hasn't been verified. Under NLS or invariant globalization,
+the first normalizing Compile or Parse throws unless the caller enables
+`UnicodeEnvironment.AllowNonstandardRuntimeNormalization`. `HostGlobalizationCheckTests`
+verify the exception and opt-out in-process.
+`HostGlobalizationChildProcessTests` start processes in the actual host modes
+to verify their detection. `AllowNonstandardRuntimeNormalization` only suppresses this
+safety check. It doesn't certify the host's Unicode behavior. An application
+that enables it must run its parser integration tests in a separate process
+started with the same globalization setting and, for NLS, on the same pinned
+Windows version used in production. Invariant globalization should be accepted
+only when the application doesn't depend on normalization or deliberately
+wants normalization to do nothing. Applications that need tested,
+host-independent behavior should select `UnicodeImplementation.Bundled`.
 
 ## The IL2CPP Pass
 
-`dotnet test` runs on the .NET 10 CoreCLR, a JIT runtime, against the library's net8.0 build. Unity's IL2CPP backend (iOS, WebGL, Switch) loads the netstandard2.1 build and compiles it ahead of time, so code that passes every `dotnet test` can still fail on first load in a player. `src/InductorParser.Tests/Unity/` is a minimal Unity project that exists to catch exactly that.
+`dotnet test` runs on the .NET 8 and .NET 10 CoreCLR JIT runtimes against the library's net8.0 build. Unity's IL2CPP backend (iOS, WebGL, Switch) loads the netstandard2.1 build and compiles it ahead of time, so code that passes every `dotnet test` can still fail on first load in Unity. `src/InductorParser.Tests/Unity/` is a minimal Unity project that exists to catch exactly that.
 
 ```
 ./src/InductorParser.Tests/runil2cpptest.sh
 ```
 
-The script syncs the test sources from `{Core,Rules,E2EExamples}/` (plus the Prolog fixture corpus) into the Unity project and runs them, about 7,200 tests once the corpus-driven matrices expand, on an IL2CPP Standalone player it builds. `DocExamples/`, `Fuzzing/`, and `Lexing/` don't sync and stay CoreCLR-only (`Lexing/` holds the differential tests that compare the built-in segmenter and normalizer against CoreCLR's `StringInfo` and `string.Normalize`, which only mean something on CoreCLR). Results land in `test-results/` at the repo root. It needs Unity 6000.3.13f1 (the version in `ProjectVersion.txt`) with the IL2CPP module installed, and it preflight-checks both before spending minutes on Unity's startup.
+The script syncs the test sources from `{Core,Rules,E2EExamples}/` (plus the Prolog fixture corpus) into a temporary copy of the Unity project under `test-results/` and runs them, about 7,200 tests once the corpus-driven matrices expand, on an IL2CPP Standalone player it builds. `DocExamples/`, `Fuzzing/`, and `Lexing/` don't sync and stay CoreCLR-only (`Lexing/` holds the differential tests that compare the built-in segmenter and normalizer against CoreCLR's `StringInfo` and `string.Normalize`, which only mean something on CoreCLR). Results land in `test-results/` at the repo root. By default it needs Unity 6000.3.13f1 (the version in `ProjectVersion.txt`) with the IL2CPP module installed, and it preflight-checks both before spending minutes on Unity's startup. Set `UNITY_VERSION` or `UNITY_EDITOR` as described in the platform section to try another editor safely.
 
-The same tests behave the same on both platforms because both platforms segment and normalize the same way. On CoreCLR the tests run against the runtime's `StringInfo` and `string.Normalize`. Under IL2CPP they run against the library's built-in segmenter and normalizer. And the differential tests ensure each pair is the same on .NET 10 (normalization compared everywhere except the code points Unicode 16.0 added), so a grapheme-heavy or normalization-heavy test can't pass on one platform and fail on the other over Unicode data.
+The same tests behave the same on both platforms because both platforms segment and normalize the same way. On CoreCLR the tests run against the runtime's `StringInfo` and `string.Normalize`. Under IL2CPP they run against the library's built-in segmenter and normalizer. The differential tests validate the built-in implementations against both supported CoreCLR runtimes (normalization is compared everywhere except the code points Unicode 16.0 added), so a grapheme-heavy or normalization-heavy test can't pass on one platform and fail on the other over the compared Unicode data.
 
 These same tests already passed on CoreCLR before this pass runs, so a failure here is never about the grammar logic. It points at the platform: an AOT problem, a string literal IL2CPP rewrote (it replaces unpaired surrogates in literals with U+FFFD, which is why the corpus builds lone surrogates at runtime), or a test-data file the sync doesn't copy.
 

@@ -5,16 +5,15 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 /// <summary>
-/// The main class for building grammars. Every built-in rule
-/// type has a corresponding factory method here, so grammar code
+/// This is the main class for building grammars. Every built-in rule
+/// type has a factory method here and most of the classes themselves are internal. Thus, grammar code
 /// composes rules by calling these functions instead of
 /// instantiating rule classes directly.
 /// </summary>
 /// <remarks>
-/// The idiomatic usage is <c>using static InductorParser.Rules;</c>
-/// at the top of a grammar file, which drops the class prefix and
-/// lets a grammar read close to the shape you'd write on a
-/// whiteboard:
+/// The idiomatic usage is to put <c><see cref="Rules">using static InductorParser.Rules;</see></c>
+/// at the top of a grammar file, which allows the rule factory calls to drop the class prefix. This makes a grammar 
+/// read close to the way you'd write it on a whiteboard:
 /// <code>
 /// var expression = And(
 ///     Identifier(),
@@ -25,60 +24,68 @@ namespace InductorParser;
 /// );
 /// </code>
 /// Most of the factory methods just forward their arguments to the matching rule
-/// constructor. A few factories
-/// compose several rules instead of forwarding to a single rule type,
-/// because every grammar ends up wanting them.
+/// class constructor. A few factories
+/// compose several rules instead of forwarding to a single rule type. This is a convenience since
+/// many grammars end up wanting them.
 ///
 /// Every rule has a default <see cref="FlattenType"/> that
-/// controls how the match contributes to the parse tree: Delete
-/// drops the node, Flatten lifts its children into the parent,
-/// Preserve keeps the rule's Symbol. Each factory's summary names its
-/// default. Override this on any rule by using
-/// <see cref="Rule.Flatten(FlattenType)"/> to change it for a
+/// controls how it contributes to the parse tree when it matches: <see cref="InductorParser.SyntaxTree.FlattenType.Delete">FlattenType.Delete</see>
+/// drops the node, <see cref="FlattenType.Flatten">FlattenType.Flatten</see> lifts its children into the parent,
+/// <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> keeps the rule's Symbol. Each factory's summary lists its
+/// default. You can override it on any rule by using
+/// <see cref="Rule.Flatten(FlattenType)">Rule.Flatten(FlattenType)</see> to change it for a
 /// specific use.
 ///
-/// Two fluent modifiers on <see cref="Rule"/> show up in almost
-/// every grammar:
+/// A fluent modifier configures a rule and returns that same rule, so
+/// you can chain several calls in one expression. Two such modifiers on
+/// <see cref="Rule"/> show up in almost every grammar:
 /// <list type="bullet">
 /// <item><description>
-/// <see cref="Rule.As(string)"/> (or <see cref="Rule.As(SymbolId)"/>)
+/// <see cref="Rule.As(string)">Rule.As(string)</see> (or <see cref="Rule.As(SymbolId)">Rule.As(SymbolId)</see>)
 /// names the rule so trace output, error messages, and
-/// <c>Tree.Find</c> can refer to it. Naming also flips the rule's
-/// <see cref="FlattenType"/> to Preserve so Find can see it.
+/// <see cref="Symbol.Find(SymbolId)">Symbol.Find(SymbolId)</see> can refer to it. Naming also flips the rule's
+/// <see cref="FlattenType"/> to <see cref="InductorParser.SyntaxTree.FlattenType.Preserve">FlattenType.Preserve</see> so Find can see it.
 /// </description></item>
 /// <item><description>
-/// <see cref="Rule.WithError(string, bool)"/> attaches a custom
+/// <see cref="Rule.WithError(string, bool)">Rule.WithError(string, bool)</see> attaches a custom
 /// message that surfaces when this rule is the deepest point a parse
 /// failed, in place of the generic "unexpected 'x'".
 /// </description></item>
 /// </list>
-/// Both return the same rule, so they chain.
+/// For example, create an identifier rule, name it, and attach an error message:
+/// <code>
+/// var variableName = Identifier()
+///     .As("variableName")
+///     .WithError("Expected a variable name");
+/// </code>
+/// Each call configures the rule returned by the previous call. The final
+/// result is one rule that you can use inside a larger grammar.
 /// </remarks>
 public static class Rules
 {
     /// <summary>
     /// Match one token whose content is exactly the given character.
-    /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
+    /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
-    /// cluster), so <c>Token('a')</c> matches when the token is the
+    /// cluster), so <c><see cref="Rules.Token(char)">Rules.Token('a')</see></c> matches when the token is the
     /// single char 'a' but fails when 'a' is combined with a
     /// following accent (because the token is then rendered as one
     /// 'a' with an accent over it, which doesn't match a bare 'a').
     /// To match a single character that's built from several code
     /// points like that (a base letter plus a combining accent, a
     /// skin-tone emoji, a flag), pass the whole thing as a string to
-    /// <see cref="Token(string)"/>.
+    /// <see cref="Token(string)">Rules.Token(string)</see>.
     ///
-    /// For multi-grapheme matches use <see cref="Literal"/>.
+    /// For multi-grapheme matches use <see cref="Literal">Rules.Literal(string)</see>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="c"/> can't stand alone as a character. A single
-    /// <c>char</c> can't hold a character above U+FFFF (like an emoji),
-    /// which is written as two <c>char</c>s together, and this is one
-    /// half of such a pair. To match a character above U+FFFF, use
-    /// <see cref="Token(Rune)"/> or <see cref="Token(int)"/>.
+    /// The value passed to <paramref name="c"/> is a UTF-16 surrogate
+    /// (U+D800 through U+DFFF). These values represent one half of the
+    /// two-<c>char</c> pair needed to encode a code point above U+FFFF,
+    /// so this overload rejects them. To match such a code point, use
+    /// <see cref="Token(Rune)">Rules.Token(Rune)</see> or <see cref="Token(int)">Rules.Token(int)</see>.
     /// </exception>
     public static Rule Token(char c)
     {
@@ -91,20 +98,20 @@ public static class Rules
     /// <summary>
     /// Match one token whose content is exactly the given
     /// <see cref="Rune"/>. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
     /// cluster), so this matches when the user sees one bare
     /// <c>r</c> at the current position. It fails when <c>r</c> is
     /// followed by Unicode characters that tell the renderer to
-    /// glue them all into a single composed character, because
+    /// glue them all into a single grapheme cluster, because
     /// then the user sees one combined character at that position,
     /// not a bare <c>r</c>.
     /// To match that combined character, pass the whole thing as a
-    /// string to <see cref="Token(string)"/>.
+    /// string to <see cref="Token(string)">Rules.Token(string)</see>.
     ///
-    /// For multi-grapheme matches use <see cref="Literal"/>.
+    /// For multi-grapheme matches use <see cref="Literal">Rules.Literal(string)</see>.
     /// </remarks>
     public static Rule Token(Rune r) => new GraphemeRule(r.ToString());
 
@@ -112,20 +119,20 @@ public static class Rules
     /// Match one token whose content is exactly the rune with the
     /// given integer code point (the integer Unicode assigns to a
     /// character). Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
     /// cluster), so this matches when the user sees the given rune
     /// standing alone at the current position. It fails when the
     /// rune is followed by Unicode characters that tell the
-    /// renderer to glue them all into a single composed character,
+    /// renderer to glue them all into a single grapheme cluster,
     /// because then the user sees one combined character at that
     /// position, not the bare rune.
     /// To match that combined character, pass the whole thing as a
-    /// string to <see cref="Token(string)"/>.
+    /// string to <see cref="Token(string)">Rules.Token(string)</see>.
     ///
-    /// For multi-grapheme matches use <see cref="Literal"/>.
+    /// For multi-grapheme matches use <see cref="Literal">Rules.Literal(string)</see>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="codepoint"/> isn't a valid Unicode scalar
@@ -143,7 +150,7 @@ public static class Rules
     /// <summary>
     /// Match one token (one character as the user sees it) whose
     /// content equals the given string. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
@@ -158,30 +165,30 @@ public static class Rules
     /// a single token from the lexer and this rule matches it in
     /// one compare.
     ///
-    /// For multi-grapheme matches use <see cref="Literal"/>.
+    /// For multi-grapheme matches use <see cref="Literal">Rules.Literal(string)</see>.
     /// </remarks>
     public static Rule Token(string token) => new GraphemeRule(token);
 
     /// <summary>
     /// Match an exact multi-token string. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
-    /// cluster). Literal matches a sequence of them in order, so the
+    /// cluster). <see cref="Rules.Literal">Rules.Literal</see> matches a sequence of them in order, so the
     /// string is the exact text to match.
-    /// For a one-token match use <see cref="Token(string)"/>.
-    /// Literal is the N-token generalization and collapses what
-    /// would otherwise be N Token rules into
+    /// For a one-token match use <see cref="Token(string)">Rules.Token(string)</see>.
+    /// <see cref="Rules.Literal">Rules.Literal</see> is the N-token generalization and collapses what
+    /// would otherwise be N <see cref="Rules.Token(char)">Rules.Token</see> rules into
     /// one. 
     /// </remarks>
     public static Rule Literal(string value) => new LiteralRule(value);
 
     /// <summary>
-    /// ASCII-case-insensitive variant of <see cref="Literal"/>. The
+    /// ASCII-case-insensitive variant of <see cref="Literal">Rules.Literal(string)</see>. The
     /// pattern must be ASCII-only. Construction throws on any char
     /// outside <c>0x00..0x7F</c>. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// ASCII letters (A-Z, a-z) in the pattern match either case in
@@ -197,14 +204,14 @@ public static class Rules
     /// <summary>
     /// Match one token (one character as the user sees it) when that
     /// token is in the given <see cref="TokenSet"/>. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// The workhorse character-class rule.
-    /// A TokenSet can hold sets of anything the user sees as one
+    /// A <see cref="InductorParser.TokenSet">TokenSet</see> can hold sets of anything the user sees as one
     /// character, including composed sequences like skin-toned
     /// emoji, regional-indicator flags, and family emoji. So a set
-    /// built with <c>TokenSet.Letters | TokenSet.Graphemes("🇺🇸")</c>
+    /// built with <c><see cref="TokenSet.Graphemes">TokenSet.Letters | TokenSet.Graphemes("🇺🇸")</see></c>
     /// matches either a letter or the US flag, each as one token.
     /// <code>
     /// // Identifier character: any letter, digit, or underscore
@@ -227,15 +234,15 @@ public static class Rules
     /// Throws at construction if any two consecutive runes in the input
     /// form one grapheme cluster (CRLF, NFD accent, ZWJ emoji, etc.). If you want sets that 
     /// include multi-char tokens, build the <see cref="TokenSet"/> with
-    /// <see cref="TokenSet.Graphemes(string[])"/> and pass it to the
-    /// <see cref="OneOf(TokenSet)"/> overload. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
+    /// <see cref="TokenSet.Graphemes(string[])">TokenSet.Graphemes(string[])</see> and pass it to the
+    /// <see cref="OneOf(TokenSet)">Rules.OneOf(TokenSet)</see> overload. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>OneOf(TokenSet.Runes(runes))</c>.
+    /// Equivalent to <c><see cref="Rules.OneOf(TokenSet)">Rules.OneOf(TokenSet.Runes(runes))</see></c>.
     /// When you need ranges, category unions, complements, or grapheme
     /// clusters, use <see cref="TokenSet"/> directly and pass it to the
-    /// <see cref="OneOf(TokenSet)"/> overload.
+    /// <see cref="OneOf(TokenSet)">Rules.OneOf(TokenSet)</see> overload.
     /// </remarks>
     public static Rule OneOf(string runes) => new OneOfRule(TokenSet.Runes(runes));
 
@@ -243,7 +250,7 @@ public static class Rules
     /// Match one token (one character as the user sees it) when
     /// that token isn't in the given <see cref="TokenSet"/>.
     /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// The idiomatic "any character except these" rule, commonly
@@ -258,15 +265,15 @@ public static class Rules
     /// Throws at construction if any two consecutive runes in the input
     /// form one grapheme cluster (CRLF, NFD accent, ZWJ emoji, etc.). If
     /// you want sets that include multi-char tokens, build the
-    /// <see cref="TokenSet"/> with <see cref="TokenSet.Graphemes(string[])"/>
-    /// and pass it to the <see cref="NoneOf(TokenSet)"/> overload. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
+    /// <see cref="TokenSet"/> with <see cref="TokenSet.Graphemes(string[])">TokenSet.Graphemes(string[])</see>
+    /// and pass it to the <see cref="NoneOf(TokenSet)">Rules.NoneOf(TokenSet)</see> overload. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>NoneOf(TokenSet.Runes(runes))</c>.
+    /// Equivalent to <c><see cref="Rules.NoneOf(TokenSet)">Rules.NoneOf(TokenSet.Runes(runes))</see></c>.
     /// When you need ranges, category unions, complements, or grapheme
     /// clusters, use <see cref="TokenSet"/> directly and pass it to the
-    /// <see cref="NoneOf(TokenSet)"/> overload.
+    /// <see cref="NoneOf(TokenSet)">Rules.NoneOf(TokenSet)</see> overload.
     /// </remarks>
     public static Rule NoneOf(string runes) => new NoneOfRule(TokenSet.Runes(runes));
 
@@ -274,22 +281,22 @@ public static class Rules
     /// Scan forward while the next token is in <paramref name="set"/>,
     /// stopping at the first token outside the set, and return the whole
     /// run as one leaf <see cref="SyntaxTree.Symbol"/>. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// Use this for the hot scanning paths: identifiers, words, numbers,
     /// whitespace runs, and other character-class runs where you want the run as
     /// a single symbol, not N independent symbols. The matched text is the same as
-    /// <c>AtLeast(minimumCount, OneOf(set))</c>, but the runtime
-    /// cost is very different. The <c>OneOf</c> form opens a transaction
+    /// <c><see cref="Rules.AtLeast">Rules.AtLeast</see>(minimumCount, <see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(set))</c>, but the runtime
+    /// cost is very different. The <see cref="Rules.OneOf(TokenSet)">Rules.OneOf(TokenSet)</see> form opens a transaction
     /// and allocates a Symbol per token. This rule opens one transaction at the top, runs a tight
     /// scan loop in the lexer, and emits one Symbol over the whole run.
     ///
-    /// The exact converse of <see cref="ScanUntil(TokenSet, bool)"/>: ScanUntil
-    /// stops when the next token is in its stop set, ScanWhile stops when
-    /// the next token is outside its match set. Use <c>ScanWhile</c> when
+    /// The exact converse of <see cref="ScanUntil(TokenSet, bool)">Rules.ScanUntil(TokenSet, bool)</see>: <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see>
+    /// stops when the next token is in its stop set, <see cref="InductorParser.Rules.ScanWhile(InductorParser.TokenSet,System.Int32)">Rules.ScanWhile</see> stops when
+    /// the next token is outside its match set. Use <see cref="Rules.ScanWhile">Rules.ScanWhile(TokenSet, int)</see> when
     /// the run's character class is the natural way to describe the body
-    /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet, bool)"/>
+    /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet, bool)">Rules.ScanUntil(TokenSet, bool)</see>
     /// when only the boundary is namable (string bodies, comment bodies).
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
@@ -301,20 +308,20 @@ public static class Rules
     /// <summary>
     /// Match text up to (but not including) a token in the stopAt set.
     /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// Succeeds with a possibly empty body when the stopper matches.
     /// Fails if end-of-input is reached without ever matching the
     /// stopper, unless <paramref name="eofIsTerminator"/> is true.
     /// It scans the characters directly in one pass, which is a meaningful
-    /// speedup over <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
+    /// speedup over <c><see cref="Rules.ZeroOrMore">Rules.ZeroOrMore(Rules.NoneOf(stopAt))</see></c> for long strings.
     /// <para>
     /// Pass <paramref name="eofIsTerminator"/> = <c>true</c> for
     /// grammars where the body legitimately ends at the stopper or at
     /// EOF (line comments that may close with a newline or with the
     /// end of file, for example). For "match the rest of the input,"
-    /// use <see cref="ScanUntilEof"/> instead.
+    /// use <see cref="ScanUntilEof">Rules.ScanUntilEof()</see> instead.
     /// </para>
     /// <code>
     /// // CSV field body: scan until the next comma or line terminator
@@ -332,9 +339,9 @@ public static class Rules
         new ScanUntilRule(stopAt, eofIsTerminator);
 
     /// <summary>
-    /// The same as <see cref="ScanUntil(TokenSet, bool)"/> but also including escape sequences.
+    /// The same as <see cref="ScanUntil(TokenSet, bool)">Rules.ScanUntil(TokenSet, bool)</see> but also including escape sequences.
     /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// When the scanner hits the <paramref name="escapeStart"/>
@@ -356,7 +363,7 @@ public static class Rules
     /// <summary>
     /// Same as the Rune-valued escape-start overload, but with a
     /// rule-valued escape start instead. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// For escapes whose start marker is longer than one rune.
@@ -375,14 +382,15 @@ public static class Rules
         new ScanUntilRule(stopAt, escapeStart, escapeEnd, eofIsTerminator);
 
     /// <summary>
-    /// <see cref="ScanUntil(TokenSet, bool)"/> with a rule-valued stop
+    /// <see cref="ScanUntil(TokenSet, bool)">Rules.ScanUntil(TokenSet, bool)</see> with a rule-valued stop
     /// condition. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
-    /// Use when the "end of string" boundary is more than a set of
-    /// runes (for example, the closing delimiter is a multi-char
-    /// sequence like <c>]]&gt;</c>).
+    /// Use when the stop condition needs to match a sequence of tokens,
+    /// such as the closing delimiter <c>]]&gt;</c>, or another rule-based
+    /// pattern. A <see cref="TokenSet"/> stop condition matches one token
+    /// at a time, so it can't match a delimiter that spans several tokens.
     /// <code>
     /// // XML CDATA body: scan until the closing "]]&gt;"
     /// var cdataBody = ScanUntil(Literal("]]&gt;"));
@@ -395,9 +403,9 @@ public static class Rules
         new ScanUntilRule(stopAt, eofIsTerminator);
 
     /// <summary>
-    /// Rule-stopper ScanUntil with escape sequences. Default
+    /// Rule-stopper <see cref="InductorParser.Rules.ScanUntil(InductorParser.Rule,System.Boolean)">Rules.ScanUntil</see> with escape sequences. Default
     /// <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// <code>
@@ -416,11 +424,11 @@ public static class Rules
     /// Match every remaining token to end-of-input as one leaf. Always
     /// succeeds, including on empty input (with a zero-width leaf).
     /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// For grammars whose final element is "the rest of the input."
-    /// Implemented as <c>ScanUntil(TokenSet.Empty, eofIsTerminator: true)</c>:
+    /// Implemented as <c><see cref="Rules.ScanUntil(TokenSet, bool)">Rules.ScanUntil(TokenSet.Empty, eofIsTerminator: true)</see></c>:
     /// no stopper ever matches, so the scan runs to EOF, which
     /// <c>eofIsTerminator</c> allows, and returns one leaf over the whole
     /// remaining span.
@@ -435,28 +443,14 @@ public static class Rules
     /// <summary>
     /// Match any one token (one character as the user sees it).
     /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
-    /// Fails only at EOF. It's the "match any one character" catch-all for
-    /// the two shapes where a grammar has to consume input it isn't
-    /// otherwise describing:
-    /// <list type="bullet">
-    /// <item><description>
-    /// Error recovery. After a parse hits input it can't handle, a common
-    /// fix is to skip ahead to a known resync point (the next newline, a
-    /// closing brace) and resume from there. The loop that eats the tokens
-    /// in between matches them with <c>AnyToken()</c>:
-    /// <c>ZeroOrMore(And(Not(resyncPoint), AnyToken()))</c> keeps consuming
-    /// one token at a time until the resync point shows up.
-    /// </description></item>
-    /// <item><description>
-    /// Pass-through text. Grammars that pull out a few structured pieces (a
+    /// Fails only at EOF. Use it as a catch-all for pass-through text:
+    /// grammars that pull out a few structured pieces (a
     /// <c>{{ name }}</c> interpolation in a template, say) and copy
-    /// everything else through as-is use <c>AnyToken()</c> for the "any
+    /// everything else through as-is use <see cref="Rules.AnyToken">Rules.AnyToken()</see> for the "any
     /// other character" branch.
-    /// </description></item>
-    /// </list>
     /// </remarks>
     public static Rule AnyToken() => new AnyTokenRule();
 
@@ -464,11 +458,11 @@ public static class Rules
     /// Negative lookahead: succeeds if <paramref name="inner"/>
     /// would fail at the current position, fails if it would
     /// succeed. Consumes nothing either way. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// Use for "anything except X" shapes that
-    /// <see cref="NoneOf(TokenSet)"/> can't express because X spans
+    /// <see cref="NoneOf(TokenSet)">Rules.NoneOf(TokenSet)</see> can't express because X spans
     /// more than one token (a multi-token literal like
     /// <c>"function"</c>, for example).
     /// </remarks>
@@ -478,7 +472,7 @@ public static class Rules
     /// Positive lookahead: succeeds if <paramref name="inner"/>
     /// would match at the current position, fails if it wouldn't.
     /// Consumes nothing either way. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// Use to assert content is ahead without committing the lexer
@@ -488,11 +482,11 @@ public static class Rules
 
     /// <summary>
     /// Wrap <paramref name="inner"/> so it can be given its own name with
-    /// <c>.As(string)</c> or <c>.As(SymbolId)</c>, letting the same rule
+    /// <see cref="InductorParser.Rule.As(string)">Rule.As(string)</see> or <see cref="InductorParser.Rule.As(InductorParser.SyntaxTree.SymbolId)">Rule.As(SymbolId)</see>, letting the same rule
     /// shape appear in a grammar under more than one name and be found
     /// under each. The alias matches exactly what <paramref name="inner"/>
     /// matches. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Use when one rule shape needs to appear in a grammar under
@@ -503,18 +497,28 @@ public static class Rules
     /// var year  = Alias(digitSequence).As("year");
     /// var month = Alias(digitSequence).As("month");
     /// </code>
-    /// The fluent equivalent is <see cref="Rule.AliasedAs(string)"/>.
+    /// The fluent equivalent is <see cref="Rule.AliasedAs(string)">Rule.AliasedAs(string)</see>.
     /// <para>
-    /// Once named, the alias replaces the inner's identity, so aliasing
-    /// an already-named (Preserve) inner shows the match under the
-    /// alias's name instead of the inner's, not nested under it. Until
-    /// .As(...) names it, the alias is transparent: it delegates to the
-    /// inner and the parse tree comes out exactly as if the alias weren't
-    /// written, so a named inner is still findable through it.
+    /// Until <c><see cref="Rule.As(string)">Rule.As</see>(...)</c> names it, the alias changes nothing. The
+    /// match is found under the inner's original name:
+    /// <code>
+    /// var digits = OneOrMore(OneOf(TokenSet.Digits)).As("digits");
+    /// var result = Alias(digits).Parse("1234");
+    /// result.Find(digits);   // the "1234" match
+    /// </code>
+    /// Once named, the alias's Symbol takes the inner's place in the tree
+    /// (it doesn't sit above it), so the match is found under the new
+    /// name instead:
+    /// <code>
+    /// var year = Alias(digits).As("year");
+    /// var result = year.Parse("1234");
+    /// result.Find(year);     // the same "1234" match
+    /// result.Find(digits);   // null
+    /// </code>
     /// </para>
     /// <para>
-    /// Errors: the inner's own <c>.WithError</c> fires from inside it as
-    /// usual. The alias's own <c>.WithError</c> is anchored at the alias's
+    /// Errors: the inner's own <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">Rule.WithError</see> fires from inside it as
+    /// usual. The alias's own <see cref="InductorParser.Rule.WithError(System.String,System.Boolean)">Rule.WithError</see> is anchored at the alias's
     /// start, never deeper than where the inner fails, so under "deepest
     /// failure wins" the inner's failure wins unless the alias's is marked
     /// forced.
@@ -524,7 +528,7 @@ public static class Rules
 
     /// <summary>
     /// Match every child in order. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Fails if any child fails, rolling the lexer back to the
@@ -538,7 +542,7 @@ public static class Rules
     /// <summary>
     /// Try each child left-to-right and commit to
     /// the first one that matches. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Unlike regex, once a child commits there's no
@@ -554,12 +558,12 @@ public static class Rules
     /// Match <paramref name="inner"/> between
     /// <paramref name="atLeast"/> and <paramref name="atMost"/>
     /// times inclusive. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
-    /// <see cref="OneOrMore"/>, <see cref="ZeroOrMore"/>,
-    /// <see cref="Optional"/>, <see cref="AtLeast"/>,
-    /// <see cref="AtMost"/>, and <see cref="Exactly"/> are special
+    /// <see cref="OneOrMore">Rules.OneOrMore(Rule)</see>, <see cref="ZeroOrMore">Rules.ZeroOrMore(Rule)</see>,
+    /// <see cref="Optional">Rules.Optional(Rule)</see>, <see cref="AtLeast">Rules.AtLeast(int, Rule)</see>,
+    /// <see cref="AtMost">Rules.AtMost(int, Rule)</see>, and <see cref="Exactly">Rules.Exactly(int, Rule)</see> are special
     /// cases of this composite.
     /// <para>
     /// All of them, this one included, are greedy: within the allowed
@@ -575,12 +579,12 @@ public static class Rules
     /// <summary>
     /// Match <paramref name="inner"/> one or more times.
     /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(1, int.MaxValue, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">Rules.BetweenInclusive(1, int.MaxValue, inner)</see></c>.
     /// </remarks>
     public static Rule OneOrMore(Rule inner) =>
         new BetweenInclusiveRule(inner, 1, int.MaxValue, "OneOrMore");
@@ -588,12 +592,12 @@ public static class Rules
     /// <summary>
     /// Match <paramref name="inner"/> zero or more times.
     /// Always succeeds. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(0, int.MaxValue, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">Rules.BetweenInclusive(0, int.MaxValue, inner)</see></c>.
     /// </remarks>
     public static Rule ZeroOrMore(Rule inner) =>
         new BetweenInclusiveRule(inner, 0, int.MaxValue, "ZeroOrMore");
@@ -601,12 +605,12 @@ public static class Rules
     /// <summary>
     /// Match <paramref name="inner"/> zero or one time. Always
     /// succeeds. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Greedy: it takes the match when the inner matches and never gives
     /// it back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(0, 1, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">Rules.BetweenInclusive(0, 1, inner)</see></c>.
     /// </remarks>
     public static Rule Optional(Rule inner) =>
         new BetweenInclusiveRule(inner, 0, 1, "Optional");
@@ -615,12 +619,12 @@ public static class Rules
     /// Match <paramref name="inner"/> at least
     /// <paramref name="atLeast"/> times, no upper bound. Default
     /// <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(atLeast, int.MaxValue, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">Rules.BetweenInclusive(atLeast, int.MaxValue, inner)</see></c>.
     /// </remarks>
     public static Rule AtLeast(int atLeast, Rule inner) =>
         new BetweenInclusiveRule(inner, atLeast, int.MaxValue, $"AtLeast[{atLeast}]");
@@ -630,12 +634,12 @@ public static class Rules
     /// <paramref name="atMost"/> times. Always succeeds
     /// (a zero-match run is legal). Default
     /// <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Greedy: it matches as many times as it can and never gives a match
     /// back to let a following rule succeed. Equivalent to
-    /// <c>BetweenInclusive(0, atMost, inner)</c>.
+    /// <c><see cref="Rules.BetweenInclusive">Rules.BetweenInclusive(0, atMost, inner)</see></c>.
     /// </remarks>
     public static Rule AtMost(int atMost, Rule inner) =>
         new BetweenInclusiveRule(inner, 0, atMost, $"AtMost[{atMost}]");
@@ -644,19 +648,19 @@ public static class Rules
     /// Match <paramref name="inner"/> exactly
     /// <paramref name="count"/> times. Default
     /// <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     /// <remarks>
     /// Greedy like the rest, which for a fixed count just means it never
     /// gives a match back: once it has matched count times, it stays
-    /// matched. Equivalent to <c>BetweenInclusive(count, count, inner)</c>.
+    /// matched. Equivalent to <c><see cref="Rules.BetweenInclusive">Rules.BetweenInclusive(count, count, inner)</see></c>.
     /// </remarks>
     public static Rule Exactly(int count, Rule inner) =>
         new BetweenInclusiveRule(inner, count, count, $"Exactly[{count}]");
 
     /// <summary>
     /// Match end-of-input. Consumes nothing. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// Succeeds when the lexer is at EOF, fails otherwise. The
@@ -668,7 +672,7 @@ public static class Rules
     /// <summary>
     /// Match a signed integer which is an optional leading + or -
     /// followed by one or more decimal digits. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten">FlattenType.Flatten</see>.
     /// </summary>
     public static Rule Integer() =>
         And(
@@ -680,8 +684,8 @@ public static class Rules
     /// Match a simple decimal which is an optional leading <c>+</c> or
     /// <c>-</c>, one or more digits, a literal <c>'.'</c>, and one
     /// or more digits. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Flatten"/> (from the composed outer
-    /// <see cref="And"/>).
+    /// <see cref="FlattenType.Flatten">FlattenType.Flatten</see> (from the composed outer
+    /// <see cref="And">Rules.And(Rule[])</see>).
     /// </summary>
     /// <remarks>
     /// Doesn't handle exponents or scientific notation. Grammars
@@ -696,29 +700,28 @@ public static class Rules
         );
 
     /// <summary>
-    /// Match one or more intra-line whitespace tokens as defined by
-    /// <c>TokenSet.InlineWhitespace</c>. Doesn't match line terminators
-    /// (<c>\n</c>, <c>\r</c>, <c>\r\n</c>, NEL, LINE SEPARATOR,
-    /// PARAGRAPH SEPARATOR, VT, FF). Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// Match one or more whitespace tokens within a line: TAB and the
+    /// Unicode space separators, per <see cref="TokenSet.InlineWhitespace">TokenSet.InlineWhitespace</see>.
+    /// Doesn't match the line terminators recognized by <see cref="EndOfLine">Rules.EndOfLine(bool)</see>.
+    /// Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// For the "skip any whitespace here, including none" shape
     /// (between tokens that don't require a separator), wrap it as
-    /// <c>Optional(InlineWhitespace())</c>.
-    /// For line terminators see <see cref="EndOfLine"/>. For
-    /// "either intra-line whitespace or a line terminator" use
-    /// <see cref="AnyWhitespace"/>.
+    /// <c><see cref="Rules.Optional">Rules.Optional(Rules.InlineWhitespace())</see></c>.
+    /// For "either intra-line whitespace or a line terminator" use
+    /// <see cref="AnyWhitespace">Rules.AnyWhitespace()</see>.
     /// </remarks>
     public static Rule InlineWhitespace() =>
         OneOrMore(OneOf(TokenSet.InlineWhitespace)).FlattenByDefault(FlattenType.Delete);
 
     /// <summary>
     /// Match one or more whitespace tokens, where each token is either
-    /// an intra-line whitespace rune (per <c>TokenSet.InlineWhitespace</c>)
-    /// or a line terminator (per <see cref="EndOfLine"/>, which handles
-    /// CRLF as one two-rune unit). Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// an intra-line whitespace rune (per <see cref="TokenSet.InlineWhitespace">TokenSet.InlineWhitespace</see>)
+    /// or a line terminator, using <see cref="EndOfLine">Rules.EndOfLine(bool)</see>, which handles
+    /// all end-of-line characters including CRLF, a two-rune unit. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// The "skip any whitespace including newlines" rule, for free-form
@@ -726,8 +729,8 @@ public static class Rules
     /// breaks as ordinary whitespace.
     /// <para>
     /// For "skip whitespace here, possibly none," wrap as
-    /// <c>Optional(AnyWhitespace())</c>. For strict intra-line whitespace
-    /// (no line terminators) use <see cref="InlineWhitespace"/>.
+    /// <c><see cref="Rules.Optional">Rules.Optional(Rules.AnyWhitespace())</see></c>. For strict intra-line whitespace
+    /// (no line terminators) use <see cref="InlineWhitespace">Rules.InlineWhitespace()</see>.
     /// </para>
     /// </remarks>
     public static Rule AnyWhitespace() =>
@@ -738,33 +741,20 @@ public static class Rules
     /// other Unicode line breaks listed below). When
     /// <paramref name="eofIsEol"/> is <c>true</c>, also matches at
     /// end-of-input. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// <see cref="FlattenType.Delete">FlattenType.Delete</see>.
     /// </summary>
     /// <remarks>
     /// Consumes one of:
     /// <list type="bullet">
     /// <item><description>CRLF (the two-rune sequence <c>\r\n</c>)</description></item>
     /// <item><description>LF, VT, FF, CR, NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR
-    /// (the single-rune terminators in <see cref="TokenSet.LineTerminators"/>)</description></item>
+    /// (the single-rune terminators in <see cref="TokenSet.LineTerminators">TokenSet.LineTerminators</see>)</description></item>
     /// <item><description>End-of-input, but only when <paramref name="eofIsEol"/> is <c>true</c></description></item>
     /// </list>
     /// Those line terminators are the ones defined by the Unicode regex
-    /// spec (UTS #18 §1.6, RL1.6). CRLF is tried first so a CR immediately
+    /// spec (<a href="https://www.unicode.org/reports/tr18/#Line_Boundaries">UTS #18</a> §1.6, RL1.6). CRLF is tried first so a CR immediately
     /// followed by an LF is consumed as one terminator rather than split
     /// into two.
-    /// <para>
-    /// Why CRLF is a Literal and not just a set member: in the lexer's
-    /// normal grapheme mode CRLF arrives as one token, and
-    /// <see cref="TokenSet.LineTerminators"/> includes CRLF as a multi-rune
-    /// entry, so the OneOf alternative would match it as a unit on its
-    /// own. But in the one-rune-per-token mode that
-    /// <see cref="WithinToken"/> switches its sub-lexer into, CR and LF
-    /// arrive as two separate tokens. A OneOf reads exactly one
-    /// token, so alone it would match the CR and leave the LF to count as
-    /// a second terminator. A Literal matches its text across token
-    /// boundaries, so the Literal("\r\n") alternative consumes the pair
-    /// as one terminator in both token modes.
-    /// </para>
     /// </remarks>
     /// <param name="eofIsEol">
     /// When <c>true</c>, end-of-input counts as an end-of-line. The
@@ -775,6 +765,18 @@ public static class Rules
     /// </param>
     public static Rule EndOfLine(bool eofIsEol = false)
     {
+        // The Literal("\r\n") arm looks redundant: LineTerminators already
+        // holds CRLF as a multi-rune member, so in the normal grapheme mode
+        // the OneOf arm matches the CRLF token on its own. The Literal is
+        // there for UnicodeImplementation.Runtime on a legacy runtime
+        // (Unity's Mono, .NET Framework), whose StringInfo predates the
+        // UAX #29 rule that glues CR to LF and so hands the lexer CR and LF
+        // as two separate tokens. OneOf reads exactly one token and would
+        // match the CR alone, leaving the LF to count as a second
+        // terminator. Literal matches its text across token boundaries, so
+        // it takes the pair as one terminator on every runtime. It goes
+        // first so it wins over the OneOf arm. The regression test is
+        // EndOfLineRuleTests.Literal_crlf_spans_a_two_token_crlf_where_OneOf_stops_at_the_cr.
         var alternatives = eofIsEol
             ? new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators), Eof() }
             : new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators) };
@@ -788,29 +790,29 @@ public static class Rules
     /// span several runes, and the inner rule walks them one at a
     /// time over a sub-lexer switched to a special one-rune-per-token mode.
     /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// <see cref="FlattenType.Preserve">FlattenType.Preserve</see>.
     /// </summary>
     /// <remarks>
     /// Building block for rules that care about token-internal
     /// structure. Can be used for things like: 
-    /// emoji-with-modifier matchers (<c>WithinToken(And(OneOf(EmojiBase),
-    /// ZeroOrMore(OneOf(SkinToneOrZWJ))))</c>), ASCII-only strictness
-    /// (<c>WithinToken(OneOf(TokenSet.Ascii.Letters))</c> rejects any
+    /// emoji-with-modifier matchers (<c><see cref="Rules.WithinToken">Rules.WithinToken</see>(<see cref="Rules.And">Rules.And</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(EmojiBase),
+    /// <see cref="Rules.ZeroOrMore">Rules.ZeroOrMore</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(SkinToneOrZWJ))))</c>), ASCII-only strictness
+    /// (<c><see cref="Rules.WithinToken">Rules.WithinToken</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(TokenSet.Ascii.Letters))</c> rejects any
     /// multi-rune token), and validating the ordered jamo inside a Hangul
     /// syllable that's written as conjoining jamo
-    /// (<c>WithinToken(And(OneOf(Leading), OneOf(Vowel), Optional(OneOf(Trailing))))</c>
+    /// (<c><see cref="Rules.WithinToken">Rules.WithinToken</see>(<see cref="Rules.And">Rules.And</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(Leading), <see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(Vowel), <see cref="Rules.Optional">Rules.Optional</see>(<see cref="Rules.OneOf(TokenSet)">Rules.OneOf</see>(Trailing))))</c>
     /// matches one lead-vowel-optional-tail syllable).
     /// <para>
     /// One leaf Symbol is emitted per successful match, representing the
     /// whole token. Inner-rule symbols are discarded. With tracing turned
     /// on, the inner rule's per-rune steps don't show up in the trace,
     /// since the sub-lexer that walks the token doesn't have the trace
-    /// sink. WithinToken still logs its own line for whether the token
+    /// sink. <see cref="InductorParser.Rules.WithinToken(InductorParser.Rule)">Rules.WithinToken</see> still logs its own line for whether the token
     /// matched, so you see the outcome but not the steps inside. The inner
     /// parse is bounded to the token's rune span. The sub-lexer's recursion,
     /// rule-count, timeout, and cancellation budgets all count against
-    /// the outer parse: a Cancel() or expired Timeout observed on
-    /// either lexer trips both, and MaxDepth / RuleCountLimit cover the
+    /// the outer parse: a <see cref="InductorParser.ParseCancellation.Cancel">ParseCancellation.Cancel()</see> or expired <see cref="ParseOptions.Timeout">ParseOptions.Timeout</see> observed on
+    /// either lexer trips both, and <see cref="InductorParser.ParseOptions.MaxDepth">ParseOptions.MaxDepth</see> / <see cref="InductorParser.ParseOptions.RuleCountLimit">ParseOptions.RuleCountLimit</see> cover the
     /// combined outer-plus-inner work rather than letting the inner
     /// rule spend a fresh budget on top of the outer's.
     /// </para>
@@ -818,9 +820,9 @@ public static class Rules
     /// <param name="innerRule">
     /// The rule to run against the token's runes. Must consume every
     /// rune of the token on success. A rule that matches only a
-    /// prefix causes the whole <c>WithinToken</c> to fail. Any rule
-    /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
-    /// <c>OneOf</c>, etc.).
+    /// prefix causes the whole <see cref="Rules.WithinToken">Rules.WithinToken(Rule)</see> to fail. Any rule
+    /// composition is allowed inside (<see cref="And">Rules.And(Rule[])</see>, <see cref="Or">Rules.Or(Rule[])</see>,
+    /// <see cref="Rules.OneOf(TokenSet)">Rules.OneOf(TokenSet)</see>, etc.).
     /// </param>
     public static Rule WithinToken(Rule innerRule) => new WithinTokenRule(innerRule);
 
@@ -828,35 +830,34 @@ public static class Rules
     /// Match a programming-language identifier: a name that starts with a
     /// letter (or other identifier-start character) and continues with
     /// letters, digits, and the like. Follows the Unicode rules for
-    /// identifiers (UAX #31, "Unicode Identifiers and Syntax").
-    /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
+    /// identifiers (<a href="https://www.unicode.org/reports/tr31/">UAX #31</a>, "Unicode Identifiers and Syntax").
+    /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Preserve">FlattenType.Preserve</see>,
     /// so the match appears in the tree as one node whose children are
     /// one leaf per matched character (a leaf covers the character's
     /// whole grapheme cluster, which may span several runes).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// See docs/UnicodeGotchas.md for recipes that reproduce the
+    /// See <a href="../docs/UnicodeGotchas.md">Unicode Gotchas</a> for recipes that reproduce the
     /// identifier rules of specific languages (Python 3, Rust,
-    /// ECMAScript) via these parameters plus the form chosen at
-    /// <c>Compile</c> time.
+    /// ECMAScript).
     /// </para>
     /// </remarks>
     /// <param name="extraStartRunes">
     /// Extra characters to allow as the first character, on top of the
-    /// base Unicode identifier-start set (<see cref="TokenSet.XidStart"/>).
-    /// UAX #31 calls this a "profile". Typical value for a
-    /// programming-language grammar is <c>TokenSet.Runes("_")</c>. Python
+    /// base Unicode identifier-start set (<see cref="TokenSet.XidStart">TokenSet.XidStart</see>).
+    /// <a href="https://www.unicode.org/reports/tr31/">UAX #31</a> calls this a "profile". Typical value for a
+    /// programming-language grammar is <c><see cref="TokenSet.Runes(string)">TokenSet.Runes("_")</see></c>. Python
     /// and Rust use this shape. C# also permits leading underscores, though
     /// its full identifier specification differs. Defaults to
-    /// <see cref="TokenSet.Empty"/> (no additions, just the base set).
+    /// <see cref="TokenSet.Empty">TokenSet.Empty</see> (no additions, just the base set).
     /// </param>
     /// <param name="extraBodyRunes">
-    /// Runes to union into <see cref="TokenSet.XidContinue"/> for
+    /// Runes to union into <see cref="TokenSet.XidContinue">TokenSet.XidContinue</see> for
     /// every character after the first. Same idea as
     /// <paramref name="extraStartRunes"/>. ECMAScript, for example,
     /// adds <c>$</c> to both positions. Defaults to
-    /// <see cref="TokenSet.Empty"/>.
+    /// <see cref="TokenSet.Empty">TokenSet.Empty</see>.
     /// </param>
     public static Rule Identifier(
         TokenSet extraStartRunes = default,

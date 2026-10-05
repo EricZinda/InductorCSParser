@@ -1,6 +1,8 @@
-The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/.
+The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser). It's a PEG-style parser, designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/. It supports and has been tested on .NET 8, 9 and 10, as well as Unity 6000.3.13f1 Standalone IL2CPP. What this means and how to test on other platforms is described in the [Test Architecture Doc](https://ericzinda.github.io/InductorCSParser/docs/TestArchitecture.html). It's released under the [MIT License](https://github.com/EricZinda/InductorCSParser/blob/master/LICENSE).
 
-I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. My goal is to design a parser library that is:
+I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. I wrote up [how I built this](https://ericzinda.github.io/InductorCSParser/docs/HowIBuiltThis.html), if you're curious.
+
+My goal is to design a parser library that is:
 
 - **More Readable than Regex:** The grammars are self-describing and human readable so they can be reasoned about, code reviewed and understood without looking up obscure letters and symbols. 
 - **Designed for World Languages:** From the lexer, to the built-in rules, to normalization, it's designed around Unicode so grammars have a good starting point for world-language text (but it's not in your face if you don't care).
@@ -9,14 +11,24 @@ I ported this while creating a new project in Unity and during a period where I'
 - **Fast enough to be used in production**: It is competitive against other .Net Parsers and fast enough to be used as a regex replacement for most uses.
 - **Easy to understand and customize**: Your grammar is built out of simple rules that are easy to inspect and understand. Furthermore, building a new rule is simple and can do whatever you want: it is just code, not a grammar specific mathematical language
 
+To use it from .NET, add the [NuGet package](https://www.nuget.org/packages/InductorParser):
+
+```
+dotnet add package InductorParser
+```
+
+For Unity, download `InductorParser-<version>-netstandard2.1.zip` from the [latest release](https://github.com/EricZinda/InductorCSParser/releases/latest) and put `InductorParser.dll` (and the `.xml` next to it, so IntelliSense shows the docs) in your project's `Assets/Plugins` folder. Both are built from the same source: the package has netstandard2.1 and net8.0 builds, and the zip is the netstandard2.1 one that Unity's IL2CPP backend loads.
+
 If you just want to learn how to use it, follow the primers:
 
-- [Primer: Building a Grammar](docs/primer1.md)
-- [Primer: Parsing and Processing](docs/primer2.md)
-- [Primer: Parsing Errors](docs/primerFailure.md)
-- [Primer: Unicode in the Inductor Parser](docs/Primer3.md)
-- [Primer: Security-Related Concerns](docs/Primer4.md)
-- [Tutorial: Peek](docs/tutorial-peek.md)
+- [Primer: Building a Grammar](https://ericzinda.github.io/InductorCSParser/docs/primer1.html)
+- [Primer: Parsing and Processing](https://ericzinda.github.io/InductorCSParser/docs/primer2.html)
+- [Primer: Parsing Errors](https://ericzinda.github.io/InductorCSParser/docs/primerFailure.html)
+- [Primer: Unicode in the Inductor Parser](https://ericzinda.github.io/InductorCSParser/docs/Primer3.html)
+- [Primer: Security-Related Concerns](https://ericzinda.github.io/InductorCSParser/docs/Primer4.html)
+- [Tutorial: Peek](https://ericzinda.github.io/InductorCSParser/docs/tutorial-peek.html)
+
+You can also just point Claude or Codex at it.  I've used both rather interchangeably as tools [when writing this parser](https://ericzinda.github.io/InductorCSParser/docs/HowIBuiltThis.html) and they both do a good job at understanding it, fixing bugs, describing how it works and how to use it, and using it directly in other projects.
 
 For more background, read on.
 
@@ -60,7 +72,7 @@ var lineWithoutHede = And(
 ```
 
 
-[Primer: Building a Grammar](docs/primer1.md) walks through how to build rules in more detail.
+[Primer: Building a Grammar](https://ericzinda.github.io/InductorCSParser/docs/primer1.html) walks through how to build rules in more detail.
 
 ## Designed for World Languages
 If you write grammars using the Inductor Parser, you get a foundation that supports Unicode from the start:
@@ -69,7 +81,7 @@ If you write grammars using the Inductor Parser, you get a foundation that suppo
 - Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss corner cases.
 - The parser defaults to normalizing both the input and your rules to the same form (which you can choose) so that you can write rules how you want and they will match the different forms automatically.
 - Characters that can't possibly match the chosen normalized form for the input throw at compile time. They won't silently be ignored.
-- Every Symbol in the parse tree (and every error on the result) exposes its source position in four units: char index, token index, line, and column. These positions index into the original source even if it has been normalized into something else for parsing. Errors give you the single failure point the same way.
+- Every Symbol in the parse tree (and every error on the result) exposes its source position in four units: char index, token index, line, and column. These positions [index into the original source even if it has been normalized](https://ericzinda.github.io/InductorCSParser/docs/MappingPositionsAfterNormalization.html) into something else for parsing. Errors give you the single failure point the same way.
 
 You can pretend you never heard the phrase "grapheme cluster" and write rules naturally: the guardrails are there by default and give you the right base to start from.
 
@@ -154,7 +166,7 @@ var range = result.Find(quotedString)!.SourceRange!.Value;
 
 Use whichever unit your code needs. Chars for `string.Substring` or an editor diagnostic. Tokens for a `^^^` underline a human will look at and recognize as covering one thing.
 
-[Primer: Unicode in the Inductor Parser](docs/Primer3.md) walks through how Unicode works in rules in more detail.
+[Primer: Unicode in the Inductor Parser](https://ericzinda.github.io/InductorCSParser/docs/Primer3.html) walks through how Unicode works in rules in more detail.
 
 ## Safer Against Pathological Input
 
@@ -182,7 +194,7 @@ Backtracking isn't the only way to hang. A 100 MB input file, a grammar that rec
 - `MaxDepth` (default 1000) caps the recursion depth. 
 - `Timeout` (default off) caps wall-clock time spent (done without a thread to support WebGL).
 
-See [Primer: Security-Related Concerns](docs/Primer4.md) for more details on security related features and how the parser is designed to combat them.
+See [Primer: Security-Related Concerns](https://ericzinda.github.io/InductorCSParser/docs/Primer4.html) for more details on security related features and how the parser is designed to combat them.
 
 
 ## Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP 
@@ -190,15 +202,15 @@ Inductor Parser is designed to be able to be used in Unity, targeting WebGL and 
 - WebGL is single-threaded, so no background timers
 - IL2CPP means no IL can be generated at runtime: No System.Reflection.Emit, no LINQ Expression.Compile, no source generators producing IL at parse time
 - .NET Standard 2.1, not .NET 5+ since Unity's IL2CPP surface is still netstandard2.1. (works fine on .NET 5+, though!)
-- Unity's runtime splits text into characters using outdated Unicode rules (emoji sequences and CRLF come apart), and its `string.Normalize` misses conversions .NET applies, so the build Unity loads ships its own copy of .NET's character segmentation and its own UAX #15 normalizer and uses both automatically. Other runtimes can opt into the same implementations at startup using `UnicodeEnvironment.Implementation` when they need parse trees identical to a Unity client's. [UnicodeGotchas.md](docs/UnicodeGotchas.md#token-segmentation-across-runtimes) has the details.
+- Unity's runtime splits text into characters using outdated Unicode rules (emoji sequences and CRLF come apart), and its `string.Normalize` misses conversions .NET applies, so the build Unity loads ships its own copy of .NET's character segmentation and its own UAX #15 normalizer and uses both automatically. Other runtimes can opt into the same implementations at startup using `UnicodeEnvironment.Implementation` when they need parse trees identical to a Unity client's. [UnicodeGotchas.md](https://ericzinda.github.io/InductorCSParser/docs/UnicodeGotchas.html#token-segmentation-across-runtimes) has the details.
 
 ## Fast Enough to be Used in Production
 To evaluate performance I used open source benchmarks built by others so that I wasn't unfairly building tests that IP was good at. You can run them yourself in the src/Benchmarks folder.
 
-The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it's illustrative to look a the grammars for each parser library and compare for readability and reviewability, they're [here](src/Benchmarks/Json).
+The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](https://github.com/EricZinda/InductorCSParser/blob/master/src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it's illustrative to look a the grammars for each parser library and compare for readability and reviewability, they're [here](https://github.com/EricZinda/InductorCSParser/tree/master/src/Benchmarks/Json).
 
 ### Latest results
-[![Performance chart](src/Benchmarks/performance-chart.jpg)](src/Benchmarks/performance-chart.jpg)
+[![Performance chart](https://ericzinda.github.io/InductorCSParser/images/performance-chart.jpg)](https://ericzinda.github.io/InductorCSParser/images/performance-chart.jpg)
 
-Both the JPG above and the interactive [HTML version](src/Benchmarks/performance-chart.html) are regenerated automatically every benchmark run, with the run date stamped in the chart title so you can tell at a glance how fresh the numbers are. The full table with allocations and ratios is in [src/Benchmarks/README.md](src/Benchmarks/README.md).
+Both the JPG above and the interactive [HTML version](https://ericzinda.github.io/InductorCSParser/images/performance-chart.html) are regenerated automatically every benchmark run, with the run date stamped in the chart title so you can tell at a glance how fresh the numbers are. The full table with allocations and ratios is in [src/Benchmarks/README.md](https://github.com/EricZinda/InductorCSParser/blob/master/src/Benchmarks/README.md).
 

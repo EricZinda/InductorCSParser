@@ -7,11 +7,13 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
-// Tests for Symbol.PrintTree, the extension that renders a raw
-// Symbol tree using a Rule for name resolution. For ParseResult-
+// Tests for Symbol.PrintTree, which renders a Symbol subtree as
+// indented text. The no-argument overload resolves rule names through
+// the grammar the Symbol was parsed with, and the Rule overload takes
+// the grammar explicitly for hand-built Symbols. For ParseResult-
 // driven debug output, see ParseResultNamingTests.
 [TestFixture]
-public class SymbolExtensionsTests
+public class SymbolPrintTreeTests
 {
     [Test]
     public void PrintTree_renders_named_root_and_character_leaves()
@@ -237,5 +239,45 @@ public class SymbolExtensionsTests
             "  'a'\n" +
             "  'b'\n";
         Assert.That(result.Tree!.PrintTree(body), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void PrintTree_without_a_rule_resolves_names_through_the_parse_grammar()
+    {
+        // A Symbol from Rule.Parse holds the grammar it came from in its
+        // ParseContext, so the no-argument overload gives the same output
+        // as passing that grammar explicitly.
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Preserve();
+        var result = word.Parse("hi");
+        Assert.That(result.Success, Is.True);
+
+        string expected =
+            "word: \"hi\"\n" +
+            "  'h'\n" +
+            "  'i'\n";
+
+        Assert.That(result.Tree!.PrintTree(), Is.EqualTo(expected));
+        Assert.That(result.Tree!.PrintTree(), Is.EqualTo(result.Tree!.PrintTree(word)));
+    }
+
+    [Test]
+    public void PrintTree_without_a_rule_throws_for_a_hand_built_symbol()
+    {
+        // A hand-built Symbol has no ParseContext and so no grammar to
+        // resolve names against. The no-argument overload says so instead
+        // of printing "<unknown>" for every node.
+        var leaf = new Symbol(new SymbolId(SymbolRanges.CustomRangeStart + 1), FlattenType.Preserve, "a".AsMemory());
+
+        var exception = Assert.Throws<InvalidOperationException>(() => leaf.PrintTree());
+        Assert.That(exception!.Message, Does.Contain("PrintTree(Rule)"));
+    }
+
+    [Test]
+    public void PrintTree_with_a_null_rule_throws()
+    {
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Preserve();
+        var result = word.Parse("hi");
+
+        Assert.Throws<ArgumentNullException>(() => result.Tree!.PrintTree(null!));
     }
 }

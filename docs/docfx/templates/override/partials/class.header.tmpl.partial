@@ -1,4 +1,5 @@
-{{!Override of the modern template's class.header. One change from stock: the
+{{!Override of the modern template's class.header. Declarations appear in the
+   heading rather than a repeated code block. Also, the
    type's own name (the last entry in the Inheritance chain) is moved inside the
    inheritance-list conditional. Stock renders that name whenever the page is a class,
    even when the inheritance list is empty, so once our extension script clears
@@ -7,8 +8,9 @@
    real ancestor chain. Keep Mustache tag braces out of this comment: a closing
    pair would end the comment early and dump the rest of it onto the page.}}
 
-<h1 id="{{id}}" data-uid="{{uid}}" class="text-break">
-  {{>partials/title}}
+<h1 id="{{id}}" data-uid="{{uid}}" class="text-break api-declaration">
+  {{#declarationHeading}}{{{declarationHeading}}}{{/declarationHeading}}
+  {{^declarationHeading}}{{>partials/title}}{{/declarationHeading}}
   {{#sourceurl}}<a class="header-action link-secondary" title="View source" href="{{sourceurl}}"><i class="bi bi-code-slash"></i></a>{{/sourceurl}}
 </h1>
 
@@ -145,7 +147,7 @@
 <h2 id="{{id}}">{{>partials/classSubtitle}}</h2>
 <dl class="parameters">
 {{#children}}
-  <dt id="{{id}}"><code>{{syntax.content.0.value}}</code></dt>
+  <dt id="{{id}}"><code>{{#declarationHeading}}{{{declarationHeading}}}{{/declarationHeading}}{{^declarationHeading}}{{syntax.content.0.value}}{{/declarationHeading}}</code></dt>
   {{#remarks}}<dd>{{{summary}}}{{{remarks}}}</dd>{{/remarks}}
   {{^remarks}}<dd>{{{summary}}}</dd>{{/remarks}}
 {{/children}}

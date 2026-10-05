@@ -31,7 +31,7 @@ namespace InductorParser.Tests.Lexing.UnicodeConformance;
 //      AnyToken loops, Token(string) per cluster, Literal over the
 //      whole input, and OneOf / NoneOf with every TokenSet
 //      construction overload (Single(char|int|Rune), Range, Runes,
-//      |, &, ~, Universe). The point is to verify each leaf rule and
+//      |, &, ~, ScalarUniverse). The point is to verify each leaf rule and
 //      each TokenSet API path agrees with UAX #29 across the full
 //      conformance corpus, not just the hand-picked cases in
 //      GraphemeClusterIndexTests / ValidUnicodeTests / Unexpected-
@@ -496,9 +496,9 @@ public class GraphemeBreakConformanceTests
     }
 
     [TestCaseSource(nameof(Cases))]
-    public void OneOf_via_Universe_matches_single_rune_first_cluster(ConformanceCase? testCase)
+    public void OneOf_via_ScalarUniverse_matches_single_rune_first_cluster(ConformanceCase? testCase)
     {
-        AssertOneOfMatchesFirstClusterUsingRune(testCase, _ => TokenSet.Universe);
+        AssertOneOfMatchesFirstClusterUsingRune(testCase, _ => TokenSet.ScalarUniverse);
     }
 
     [TestCaseSource(nameof(Cases))]
@@ -510,7 +510,7 @@ public class GraphemeBreakConformanceTests
     [TestCaseSource(nameof(Cases))]
     public void OneOf_via_intersection_with_universe_matches_single_rune_first_cluster(ConformanceCase? testCase)
     {
-        AssertOneOfMatchesFirstClusterUsingRune(testCase, rune => TokenSet.Single(rune) & TokenSet.Universe);
+        AssertOneOfMatchesFirstClusterUsingRune(testCase, rune => TokenSet.Single(rune) & TokenSet.ScalarUniverse);
     }
 
     [TestCaseSource(nameof(Cases))]
@@ -522,7 +522,7 @@ public class GraphemeBreakConformanceTests
 
         // The excluding set leaves out the rune, so NoneOf (which inverts
         // membership) accepts it.
-        var excludingSet = TokenSet.Universe - TokenSet.Single(rune);
+        var excludingSet = TokenSet.ScalarUniverse - TokenSet.Single(rune);
         AssertRuleMatchesFirstCluster(testCase, NoneOf(excludingSet));
     }
 

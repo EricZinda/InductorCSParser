@@ -6,31 +6,31 @@ namespace InductorParser.Lexing.Unicode;
 
 /// <summary>
 /// The parser's single entry point for Unicode normalization. Every
-/// Normalize / IsNormalized call inside the library routes through this
+/// Normalize / <see cref="InductorParser.Lexing.NormalizationHelpers.IsNormalized(System.String,System.Text.NormalizationForm)">NormalizationHelpers.IsNormalized</see> call inside the library routes through this
 /// class, so the whole parser uses one implementation.
 /// </summary>
 /// <remarks>
 /// This class chooses between two implementations: the runtime's
-/// string.Normalize, and a built-in UAX #15 normalizer
-/// (https://www.unicode.org/reports/tr15/) whose generated tables in
+/// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see>, and a built-in <a href="https://www.unicode.org/reports/tr15/">UAX #15</a> normalizer
+/// (<a href="https://www.unicode.org/reports/tr15/">Unicode Normalization Forms</a>) whose generated tables in
 /// UnicodeNormalization.Data.cs are the other half of this partial
-/// class and hold the Unicode 16.0 data, like the built-in segmenter's table.
+/// class and hold the <a href="https://www.unicode.org/versions/Unicode16.0.0/">Unicode 16.0</a> data, like the built-in segmenter's table.
 /// The implementation is chosen by the process-wide setting surfaced
-/// as UnicodeEnvironment.Implementation, which governs this normalizer
+/// as <see cref="InductorParser.Lexing.UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>, which governs this normalizer
 /// and the segmenter together (they can never diverge) and is resolved
 /// and frozen on the first query from either. The built-in
 /// implementation exists because Unity's Mono runtime ships a
-/// string.Normalize that doesn't apply compatibility mappings, misses
+/// <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> that doesn't apply compatibility mappings, misses
 /// canonical mappings, and accepts ill-formed UTF-16, all of which
 /// .NET's implementation gets right.
 /// <para>
-/// The built-in normalizer runs the UAX #15 quick-check scan first:
+/// The built-in normalizer runs the <a href="https://www.unicode.org/reports/tr15/">UAX #15</a> quick-check scan first:
 /// when every scalar's quick-check property (NFC_QC and friends, a
 /// fourth generated table family) is Yes for the requested form and
 /// the combining classes are already in canonical order, the input is
-/// returned unchanged with one scan and no allocation. UAX #15 notes
+/// returned unchanged with one scan and no allocation. <a href="https://www.unicode.org/reports/tr15/">UAX #15</a> notes
 /// that much text is already NFC
-/// (https://www.unicode.org/reports/tr15/#Description_Norm), making
+/// (<a href="https://www.unicode.org/reports/tr15/#Description_Norm">Description of the Normalization Process</a>), making
 /// this an important common case. Quick-check No proves the input
 /// needs normalization, while Maybe (a scalar that might compose with
 /// a preceding character) requires a full check. Normalize rebuilds
@@ -43,9 +43,9 @@ internal static partial class UnicodeNormalization
     /// <summary>
     /// Normalize <paramref name="input"/> to <paramref name="form"/>.
     /// The first call resolves and freezes the process-wide
-    /// implementation choice (UnicodeEnvironment.Implementation): the
-    /// normalized string comes from the runtime's string.Normalize or
-    /// the built-in UAX #15 implementation below.
+    /// implementation choice (<see cref="InductorParser.Lexing.UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>): the
+    /// normalized string comes from the runtime's <see cref="string.Normalize(System.Text.NormalizationForm)">string.Normalize</see> or
+    /// the built-in <a href="https://www.unicode.org/reports/tr15/">UAX #15</a> implementation below.
     /// </summary>
     public static string Normalize(string input, NormalizationForm form)
     {

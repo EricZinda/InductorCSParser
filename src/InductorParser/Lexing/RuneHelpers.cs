@@ -6,15 +6,13 @@ namespace InductorParser.Lexing;
 
 /// <summary>
 /// Forward-direction UTF-16 rune utilities: "does input[pos] start a
-/// well-formed surrogate pair?" (<see cref="IsSurrogatePairAt(string, int)"/>)
+/// well-formed surrogate pair?" (<see cref="IsSurrogatePairAt(string, int)">RuneHelpers.IsSurrogatePairAt(string, int)</see>)
 /// and the decode-as-runes walkers built on it
-/// (<see cref="EnumerateRuneValues"/>, <see cref="RuneCount"/>).
+/// (<see cref="EnumerateRuneValues">RuneHelpers.EnumerateRuneValues(string)</see>, <see cref="RuneCount">RuneHelpers.RuneCount(ReadOnlySpan&lt;char&gt;)</see>).
 /// </summary>
 /// <remarks>
 /// This is the rune layer. Its grapheme-cluster counterpart is
-/// <c>GraphemeHelpers</c>. The two stay separate because runes and UAX #29
-/// clusters are different units, and the lexer's rune-mode / grapheme-mode
-/// split rests on keeping them apart.
+/// <see cref="GraphemeHelpers"/>.
 /// </remarks>
 public static class RuneHelpers
 {
@@ -34,8 +32,8 @@ public static class RuneHelpers
 
     /// <summary>
     /// Span overload of
-    /// <see cref="IsSurrogatePairAt(string, int)"/> with the same semantics.
-    /// It exists so span callers don't pay an <c>.AsSpan()</c> round-trip on
+    /// <see cref="IsSurrogatePairAt(string, int)">RuneHelpers.IsSurrogatePairAt(string, int)</see> with the same semantics.
+    /// It exists so span callers don't pay an <see cref="System.MemoryExtensions.AsSpan(string)">MemoryExtensions.AsSpan()</see> round-trip on
     /// what they already have.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -50,7 +48,7 @@ public static class RuneHelpers
     /// into one value. A lone surrogate yields its own code-unit value.
     /// Allocates an iterator, so it's for cold paths. Hot paths that
     /// already walk chars should decode inline with
-    /// <see cref="IsSurrogatePairAt(string, int)"/> rather than enumerate.
+    /// <see cref="IsSurrogatePairAt(string, int)">RuneHelpers.IsSurrogatePairAt(string, int)</see> rather than enumerate.
     /// </summary>
     public static IEnumerable<int> EnumerateRuneValues(string text)
     {
@@ -84,11 +82,11 @@ public static class RuneHelpers
 
     /// <summary>
     /// Count the Unicode scalar values (runes) in <paramref name="text"/>,
-    /// using the same model as <see cref="EnumerateRuneValues"/> and the
+    /// using the same model as <see cref="EnumerateRuneValues">RuneHelpers.EnumerateRuneValues(string)</see> and the
     /// lexer's one-rune-per-token Read: a well-formed high+low surrogate
     /// pair is one rune, and any stray surrogate is one rune. Allocates
     /// nothing, so it's fine on a warm path. To count a prefix, pass a
-    /// span over just that range (e.g. <c>input.AsSpan(0, position)</c>).
+    /// span over just that range (e.g. <c><see cref="System.MemoryExtensions.AsSpan(string, int, int)">input.AsSpan(0, position)</see></c>).
     /// A high surrogate at the end of the span has no paired low inside
     /// it, so it counts as one rune, matching how the lexer reads a
     /// cluster's runes.
@@ -117,10 +115,10 @@ public static class RuneHelpers
     }
 
     /// <summary>
-    /// Span overload of <see cref="TrySingleRune(string, out int)"/>. Same
+    /// Span overload of <see cref="TrySingleRune(string, out int)">RuneHelpers.TrySingleRune(string, int)</see>. Same
     /// rule: true for one non-surrogate char or one surrogate pair, false for a
     /// lone surrogate or a multi-rune span. Exists so span callers don't pay an
-    /// <c>.AsSpan()</c> round-trip on what they already have.
+    /// <see cref="System.MemoryExtensions.AsSpan(string)">MemoryExtensions.AsSpan()</see> round-trip on what they already have.
     /// </summary>
     public static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)
     {

@@ -31,8 +31,9 @@
 // The implementation is chosen by a process-wide setting, surfaced as
 // UnicodeEnvironment.Implementation and resolved at most once per
 // process. That one setting governs this segmenter and the UAX #15
-// normalizer (UnicodeNormalization) together, so the two can never
-// answer from different Unicode data, and the first query from either
+// normalizer (UnicodeNormalization) together, selecting the built-in or the
+// runtime implementations for both. Runtime Unicode data versions may differ between
+// segmentation and normalization. The first query from either
 // freezes the choice. The default, UnicodeImplementation.Automatic,
 // means the right implementations for the runtime that loaded the
 // assembly: each target framework's build bakes in its own answer, set
@@ -89,17 +90,17 @@ internal enum GraphemeClusterBreakType
 }
 
 /// <summary>
-/// Computes UAX #29 extended grapheme cluster boundaries
-/// (https://www.unicode.org/reports/tr29/). The built-in state machine
+/// Computes <a href="https://www.unicode.org/reports/tr29/">UAX #29</a> extended grapheme cluster boundaries
+/// (<a href="https://www.unicode.org/reports/tr29/">Unicode Text Segmentation</a>). The built-in state machine
 /// implements the rule set of Rev. 41
-/// (https://www.unicode.org/reports/tr29/tr29-41.html), the last
-/// edition before GB9c, over Unicode 16.0 break-property data,
+/// (<a href="https://www.unicode.org/reports/tr29/tr29-41.html">UAX #29, Revision 41</a>), the last
+/// edition before GB9c, over <a href="https://www.unicode.org/versions/Unicode16.0.0/">Unicode 16.0</a> break-property data,
 /// deliberately matching .NET 10's StringInfo, which also lacks GB9c
 /// (dotnet/runtime#111546),
 /// and its generated break-property table in
 /// GraphemeSegmentation.Data.cs is the other half of this partial
 /// class. The implementation is chosen by the process-wide setting
-/// surfaced as UnicodeEnvironment.Implementation, which governs the
+/// surfaced as <see cref="InductorParser.Lexing.UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>, which governs the
 /// segmenter and the normalizer together and is resolved and frozen on
 /// the first query (the file header explains the policy).
 /// </summary>
@@ -110,7 +111,7 @@ internal static partial class GraphemeSegmentation
     /// extended grapheme cluster. If the input is
     /// empty, returns 0. The first call resolves and freezes the
     /// process-wide implementation choice
-    /// (UnicodeEnvironment.Implementation): the length comes from the
+    /// (<see cref="InductorParser.Lexing.UnicodeEnvironment.Implementation">UnicodeEnvironment.Implementation</see>): the length comes from the
     /// runtime's StringInfo or the built-in state machine below (the
     /// file header explains the policy).
     /// </summary>
@@ -373,7 +374,7 @@ internal static partial class GraphemeSegmentation
         public int CurrentCodeUnitOffset { get; private set; }
 
         /// <summary>
-        /// Will be <see cref="GraphemeClusterBreakType.Other"/> if invalid data or EOF reached.
+        /// Will be <see cref="GraphemeClusterBreakType.Other">GraphemeClusterBreakType.Other</see> if invalid data or EOF reached.
         /// Caller shouldn't need to special-case this since the normal rules will halt on this condition.
         /// </summary>
         public GraphemeClusterBreakType CurrentType { get; private set; }
