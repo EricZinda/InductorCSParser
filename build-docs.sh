@@ -109,8 +109,10 @@ echo "=== Generating home page from readme.md ==="
 # Prepend an H1 title (the readme opens with a paragraph, no heading of its
 # own). The readme is also the NuGet package's readme, and nuget.org can't
 # resolve relative links, so every link in it is already an absolute URL:
-# docs pages point at the published site, the benchmark chart and its
-# interactive HTML at the site's images/ copies (staged above), and
+# docs pages point at the published site, the benchmark chart image at
+# raw.githubusercontent.com (nuget.org only renders images from an
+# allowlist of hosts, and the docs site isn't on it), the chart's link
+# and interactive HTML at the site's images/ copies (staged above), and
 # everything else at GitHub. Nothing needs rewriting here.
 {
     printf '# The Inductor Parser\n\n'

@@ -212,7 +212,7 @@ To evaluate performance I used open source benchmarks built by others so that I 
 The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](https://github.com/EricZinda/InductorCSParser/blob/master/src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it's illustrative to look a the grammars for each parser library and compare for readability and reviewability, they're [here](https://github.com/EricZinda/InductorCSParser/tree/master/src/Benchmarks/Json).
 
 ### Latest results
-[![Performance chart](https://ericzinda.github.io/InductorCSParser/images/performance-chart.jpg)](https://ericzinda.github.io/InductorCSParser/images/performance-chart.jpg)
+[![Performance chart](https://raw.githubusercontent.com/EricZinda/InductorCSParser/master/src/Benchmarks/performance-chart.jpg)](https://ericzinda.github.io/InductorCSParser/images/performance-chart.jpg)
 
 Both the JPG above and the interactive [HTML version](https://ericzinda.github.io/InductorCSParser/images/performance-chart.html) are regenerated automatically every benchmark run, with the run date stamped in the chart title so you can tell at a glance how fresh the numbers are. The full table with allocations and ratios is in [src/Benchmarks/README.md](https://github.com/EricZinda/InductorCSParser/blob/master/src/Benchmarks/README.md).
 

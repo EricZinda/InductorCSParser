@@ -80,7 +80,7 @@ Publishing is automatic. The `.github/workflows/docs.yml` workflow runs `build-d
 dotnet pack -c Release src/InductorParser/InductorParser.csproj -o out
 ```
 
-That produces `out/InductorParser.<version>.nupkg` containing both target frameworks with their XML doc files, plus the LICENSE and readme from the repo root so nuget.org can show them on the package page. The package id, description, tags, license, and project and repository URLs all live in the csproj. nuget.org can't resolve relative links in a package readme, which is why every link in `readme.md` is an absolute URL: docs pages point at the published site, the benchmark chart at the site's copy, and everything else at GitHub.
+That produces `out/InductorParser.<version>.nupkg` containing both target frameworks with their XML doc files, plus the LICENSE and readme from the repo root so nuget.org can show them on the package page. The package id, description, tags, license, and project and repository URLs all live in the csproj. nuget.org can't resolve relative links in a package readme, which is why every link in `readme.md` is an absolute URL: docs pages point at the published site, the benchmark chart link at the site's copy, and everything else at GitHub. nuget.org also only renders images hosted on an allowlist of domains, so the chart image itself and the version badge come from `raw.githubusercontent.com` and `img.shields.io`, which are on the list, rather than from the docs site, which isn't.
 
 # Cutting a release
 
